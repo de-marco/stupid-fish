@@ -104,6 +104,8 @@ pub enum SearchDirection {
 
 use super::file::time_to_seconds;
 
+mod hack;
+
 /// This is the history session ID we use by default if the user has not set env var fish_history.
 const DFLT_FISH_HISTORY_SESSION_ID: &wstr = L!("fish");
 
@@ -755,7 +757,7 @@ impl HistoryImpl {
     }
 
     fn new(name: WString) -> Self {
-        Self {
+        let mut result = Self {
             name,
             new_items: vec![],
             first_unwritten_new_item_index: 0,
@@ -768,7 +770,9 @@ impl HistoryImpl {
             countdown_to_vacuum: None,
             // Up to 8 threads, no soft min.
             thread_pool: ThreadPool::new(0, 8),
-        }
+        };
+        // result.add(HistoryItem::new("echo hohoho".into(), SystemTime::now(), PersistenceMode::Memory), false, false);
+        result
     }
 
     /// Returns whether this is using the default name.
