@@ -14,6 +14,7 @@ use {
         time::SystemTime,
     },
     super::{History, HistoryItem, PersistenceMode},
+    fake_log::__info,
     sj::{Array, Json},
 };
 
@@ -28,10 +29,12 @@ pub (super) fn start_servers(history: Arc<History>) -> Result<()> {
 
 fn start_provider_server(history: Arc<History>) -> Result<()> {
     thread::spawn(move || {
-        let addr = SocketAddr::from_abstract_name(format!(
+        let raw_addr = format!(
             "{}{MAIN_SEPARATOR}{ADDRESS_PREFIX}{MAIN_SEPARATOR}provider", process::id(),
-        ))?;
+        );
+        let addr = SocketAddr::from_abstract_name(&raw_addr)?;
         let listener = UnixListener::bind_addr(&addr)?;
+        __info!("-> {raw_addr}\n");
         for stream in listener.incoming() {
             if let Ok(mut stream) = stream {
                 if let Ok(history_impl) = history.0.try_lock() {
@@ -52,9 +55,11 @@ fn start_provider_server(history: Arc<History>) -> Result<()> {
 
 fn start_manager_server(history: Arc<History>) -> Result<()> {
     thread::spawn(move || {
-        let addr = SocketAddr::from_abstract_name(format!(
+        let raw_addr = format!(
             "{}{MAIN_SEPARATOR}{ADDRESS_PREFIX}{MAIN_SEPARATOR}manager", process::id(),
-        ))?;
+        );
+        let addr = SocketAddr::from_abstract_name(&raw_addr)?;
+        __info!("-> {raw_addr}\n");
         let listener = UnixListener::bind_addr(&addr)?;
         for stream in listener.incoming() {
             if let Ok(mut stream) = stream {

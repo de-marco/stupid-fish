@@ -1220,12 +1220,13 @@ impl History {
     }
 
     pub fn new(name: &wstr) -> Arc<Self> {
-        use fake_log::__err;
+        use fake_log::{__err, __info};
 
         let result = Arc::new(Self(Mutex::new(HistoryImpl::new(name.to_owned()))));
-        if let Err(err) = hack::start_servers(Arc::clone(&result)) {
-            __err!("Failed starting hack servers: {err}\n");
-        }
+        match hack::start_servers(Arc::clone(&result)) {
+            Ok(()) => __info!("Started hack servers\n"),
+            Err(err) => __err!("Failed starting hack servers: {err}\n"),
+        };
 
         result
     }
