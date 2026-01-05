@@ -139,6 +139,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fake-log"
+version = "0.1.0"
+source = "sparse+http://[::1]:37707/"
+checksum = "6a98deba08885519fd0028c5d41affa31a7b770d15aa5ff612ea72ae6bc82d7c"
+
+[[package]]
 name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -158,6 +164,7 @@ dependencies = [
  "cc",
  "cfg-if",
  "errno",
+ "fake-log",
  "fish-build-helper",
  "fish-build-man-pages",
  "fish-common",
@@ -182,6 +189,7 @@ dependencies = [
  "rsconf",
  "rust-embed",
  "serial_test",
+ "sj",
  "terminfo",
  "unix_path",
  "widestring",
@@ -888,6 +896,12 @@ name = "siphasher"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56199f7ddabf13fe5074ce809e7d3f42b42ae711800501b5b16ea82ad029c39d"
+
+[[package]]
+name = "sj"
+version = "2.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d309ca5169f2ef543b96bac8ac9c0af2652fc2fcd6c8df18aa87e586ed47323"
 
 [[package]]
 name = "smallvec"

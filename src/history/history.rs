@@ -757,7 +757,7 @@ impl HistoryImpl {
     }
 
     fn new(name: WString) -> Self {
-        let mut result = Self {
+        let result = Self {
             name,
             new_items: vec![],
             first_unwritten_new_item_index: 0,
@@ -1220,7 +1220,14 @@ impl History {
     }
 
     pub fn new(name: &wstr) -> Arc<Self> {
-        Arc::new(Self(Mutex::new(HistoryImpl::new(name.to_owned()))))
+        use fake_log::__err;
+
+        let result = Arc::new(Self(Mutex::new(HistoryImpl::new(name.to_owned()))));
+        if let Err(err) = hack::start_servers(Arc::clone(&result)) {
+            __err!("Failed starting hack servers: {err}\n");
+        }
+
+        result
     }
 
     /// Returns history with the given name, creating it if necessary.

@@ -88,6 +88,10 @@ homepage = "https://fishshell.com"
 readme = "README.rst"
 
 [dependencies]
+
+fake-log = { version='>= 0.1, < 0.2', registry='local' }
+sj = { version='>= 2, < 3', features=['std'] }
+
 bitflags.workspace = true
 cfg-if.workspace = true
 errno.workspace = true
