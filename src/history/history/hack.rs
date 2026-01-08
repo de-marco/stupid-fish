@@ -45,6 +45,12 @@ const SJ_MAP_KIND: sj::MapKind = sj::MapKind::HashMap;
 static RUNTIME: LazyLock<Result<Runtime>> = LazyLock::new(|| Runtime::new());
 
 pub (super) fn start_servers(history: Arc<History>) -> Result<()> {
+    // TODO
+    //
+    //  -   History has imp() which unwraps its inner RwLock, which might cause panics as happened.
+    //  -   We can't use try_lock() here.
+    //  -   Have History stores a clone of its inner HistoryImpl.  Then we can access that freely.
+
     let runtime = RUNTIME.as_ref().map_err(|e| Error::from(e.kind()))?;
 
     runtime.spawn(start_provider_server(Arc::clone(&history)));
