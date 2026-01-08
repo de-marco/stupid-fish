@@ -3,7 +3,7 @@ extern crate alloc;
 use {
     alloc::sync::Arc,
     std::{
-        io::Result,
+        io::{BufReader, BufWriter, Read, Result, Write},
         os::{
             linux::net::SocketAddrExt,
             unix::net::{SocketAddr, UnixListener},
@@ -11,15 +11,13 @@ use {
         path::MAIN_SEPARATOR,
         process,
         sync::LazyLock,
+        thread,
         time::SystemTime,
     },
     super::{History, HistoryItem, PersistenceMode},
     fake_log::{__err, __info},
     sj::{Array, Json},
-    tokio::{
-        io::{AsyncReadExt, AsyncWriteExt},
-        runtime::Runtime,
-    },
+    tokio::runtime::Runtime,
 };
 
 /// # Wrapper for format!(), which prefixes your optional message with: module_path!(), line!()
@@ -38,55 +36,51 @@ const SJ_MAP_KIND: sj::MapKind = sj::MapKind::HashMap;
 pub (super) static RUNTIME: LazyLock<Runtime> = LazyLock::new(|| Runtime::new().expect("Failed to make runtime"));
 
 pub (super) fn start_servers(history: Arc<History>) -> Result<()> {
-    RUNTIME.spawn(start_provider_server(Arc::clone(&history)));
-    RUNTIME.spawn(start_manager_server(history));
+    match Arc::clone(&history) {
+        history => thread::spawn(move || start_provider_server(history)),
+    };
+    thread::spawn(move || start_manager_server(history));
 
     Ok(())
 }
 
-async fn start_provider_server(history: Arc<History>) -> Result<()> {
-    let raw_addr = format!(
-        "{}{MAIN_SEPARATOR}{ADDRESS_PREFIX}{MAIN_SEPARATOR}provider", process::id(),
-    );
-    let addr = SocketAddr::from_abstract_name(&raw_addr)?;
-    let listener = tokio::net::UnixListener::try_from(UnixListener::bind_addr(&addr)?)?;
+fn start_provider_server(history: Arc<History>) -> Result<()> {
+    let raw_addr = format!("{}{MAIN_SEPARATOR}{ADDRESS_PREFIX}{MAIN_SEPARATOR}provider", process::id());
+    let listener = UnixListener::bind_addr(&SocketAddr::from_abstract_name(&raw_addr)?)?;
     __info!("-> {raw_addr}\n");
     loop {
-        match listener.accept().await {
-            Ok((mut stream, _)) => {
+        match listener.accept() {
+            Ok((stream, _)) => {
                 let history = Arc::clone(&history);
-                if let Err(_) = async move {
+                thread::spawn(move || {
                     let json = {
-                        let history_impl = history.0.lock().await;
+                        let history_impl = RUNTIME.block_on(history.0.lock());
                         Json::from_iter(history_impl.new_items.iter().map(|i| i.str().to_string()))
                     };
-                    stream.write_all(&json.format_as_bytes()?).await?;
-                    stream.flush().await
-                }.await {
-                    // Ignore it
-                }
+                    let mut stream = BufWriter::new(stream);
+                    stream.write_all(&json.format_as_bytes()?)?;
+                    stream.flush()
+                });
             },
             Err(err) => __err!("{}", __!("Failed: {err}\n")),
         };
     }
 }
 
-async fn start_manager_server(history: Arc<History>) -> Result<()> {
-    let raw_addr = format!(
-        "{}{MAIN_SEPARATOR}{ADDRESS_PREFIX}{MAIN_SEPARATOR}manager", process::id(),
-    );
-    let addr = SocketAddr::from_abstract_name(&raw_addr)?;
+fn start_manager_server(history: Arc<History>) -> Result<()> {
+    let raw_addr = format!("{}{MAIN_SEPARATOR}{ADDRESS_PREFIX}{MAIN_SEPARATOR}manager", process::id());
     __info!("-> {raw_addr}\n");
-    let listener = tokio::net::UnixListener::try_from(UnixListener::bind_addr(&addr)?)?;
+    let listener = UnixListener::bind_addr(&SocketAddr::from_abstract_name(&raw_addr)?)?;
     loop {
-        match listener.accept().await {
+        match listener.accept() {
             Ok((stream, _)) => {
                 let history = Arc::clone(&history);
-                if let Err(_) = async move {
+                thread::spawn(move || {
+                    let stream = BufReader::new(stream);
                     let mut buf = Vec::with_capacity(1024);
-                    stream.take(1024 * 1024).read_to_end(&mut buf).await?;
+                    stream.take(1024 * 1024).read_to_end(&mut buf)?;
 
-                    let mut history_impl = history.0.lock().await;
+                    let mut history_impl = RUNTIME.block_on(history.0.lock());
                     history_impl.clear();
                     for item in Array::try_from(sj::parse_bytes(buf, SJ_MAP_KIND)?)? {
                         history_impl.add(
@@ -99,9 +93,7 @@ async fn start_manager_server(history: Arc<History>) -> Result<()> {
                         );
                     }
                     Result::Ok(())
-                }.await {
-                    // Ignore it
-                }
+                });
             },
             Err(err) => __err!("{}", __!("Failed: {err}\n")),
         };
