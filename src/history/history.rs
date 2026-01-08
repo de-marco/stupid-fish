@@ -18,8 +18,7 @@ use crate::{
     common::cstr2wcstring,
     env::{EnvSetMode, EnvVar},
     fs::{
-        LOCKED_FILE_MODE, LockedFile, LockingMode, PotentialUpdate, WriteMethod, lock_and_load,
-        rewrite_via_temporary_file,
+        LOCKED_FILE_MODE, LockedFile, LockingMode, PotentialUpdate, WriteMethod, lock_and_load, rewrite_via_temporary_file,
     },
     threads::ThreadPool,
     wcstringutil::trim,
@@ -33,13 +32,16 @@ use std::{
     mem::MaybeUninit,
     num::NonZeroUsize,
     ops::ControlFlow,
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Arc, Mutex},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use bitflags::bitflags;
 use lru::LruCache;
-use nix::{fcntl::OFlag, sys::stat::Mode};
+use nix::{
+    fcntl::OFlag,
+    sys::stat::Mode,
+};
 use rand::Rng;
 
 use crate::{
@@ -1201,15 +1203,15 @@ fn should_import_bash_history_line(line: &wstr) -> bool {
 pub struct History(tokio::sync::Mutex<HistoryImpl>);
 
 impl History {
-    async fn imp(&self) -> tokio::sync::MutexGuard<'_, HistoryImpl> {
-        self.0.lock()
+    fn imp(&self) -> tokio::sync::MutexGuard<'_, HistoryImpl> {
+        hack::RUNTIME.block_on(self.0.lock())
     }
 
     /// Privately add an item. If pending, the item will not be returned by history searches until a
     /// call to resolve_pending. Any trailing ephemeral items are dropped.
     /// Exposed for testing.
     pub fn add(&self, item: HistoryItem, pending: bool) {
-        hack::RUNTIME.block_on(self.imp()).add(item, pending, true)
+        self.imp().add(item, pending, true)
     }
 
     pub fn add_commandline(&self, s: WString) {
@@ -1784,10 +1786,7 @@ pub fn in_private_mode(vars: &dyn Environment) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        History, HistoryItem, HistorySearch, PathList, PersistenceMode, SearchDirection,
-        SearchFlags, SearchType, VACUUM_FREQUENCY,
-    };
+    use super::{History, HistoryItem, HistorySearch, PathList, PersistenceMode, SearchDirection, SearchFlags, SearchType, VACUUM_FREQUENCY};
     use crate::common::ESCAPE_TEST_CHAR;
     use crate::common::{ScopeGuard, bytes2wcstring, wcs2bytes, wcs2osstring};
     use crate::env::{EnvMode, EnvSetMode, EnvStack};

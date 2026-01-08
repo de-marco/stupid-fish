@@ -22,23 +22,6 @@ use {
     },
 };
 
-/// # Wrapper for format!(), which prefixes your optional message with: module_path!(), line!()
-macro_rules! __ {
-    ($($arg: tt)+) => {
-        format!("[{module_path}-{line}] {msg}", module_path=module_path!(), line=line!(), msg=format!($($arg)+))
-    };
-    () => {
-        __!("(internal error)")
-    };
-}
-
-/// # Makes new std::io::Error
-macro_rules! err {
-    ($kind: path, $($arg: tt)+) => { std::io::Error::new($kind, __!($($arg)+)) };
-    ($($arg: tt)+) => { err!(std::io::ErrorKind::Other, $($arg)+) };
-    () => { std::io::Error::new(std::io::ErrorKind::Other, __!()) };
-}
-
 const ADDRESS_PREFIX: &str = "57b8ce61-d64293cc-da5ed9e2-d8458614";
 const SJ_MAP_KIND: sj::MapKind = sj::MapKind::HashMap;
 
@@ -63,7 +46,7 @@ async fn start_provider_server(history: Arc<History>) -> Result<()> {
             let history = Arc::clone(&history);
             if let Err(_) = async move {
                 let json = {
-                    let history_impl = history.0.lock().await?;
+                    let history_impl = history.0.lock().await;
                     Json::from_iter(history_impl.new_items.iter().map(|i| i.str().to_string()))
                 };
                 stream.write_all(&json.format_as_bytes()?).await?;
