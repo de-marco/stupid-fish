@@ -3,7 +3,7 @@ extern crate alloc;
 use {
     alloc::sync::Arc,
     std::{
-        io::{Error, Result},
+        io::Result,
         os::{
             linux::net::SocketAddrExt,
             unix::net::{SocketAddr, UnixListener},
@@ -42,7 +42,7 @@ macro_rules! err {
 const ADDRESS_PREFIX: &str = "57b8ce61-d64293cc-da5ed9e2-d8458614";
 const SJ_MAP_KIND: sj::MapKind = sj::MapKind::HashMap;
 
-static RUNTIME: LazyLock<Result<Runtime>> = LazyLock::new(|| Runtime::new());
+pub (super) static RUNTIME: LazyLock<Runtime> = LazyLock::new(|| Runtime::new().expect("Failed to make runtime"));
 
 pub (super) fn start_servers(history: Arc<History>) -> Result<()> {
     // TODO
@@ -51,10 +51,8 @@ pub (super) fn start_servers(history: Arc<History>) -> Result<()> {
     //  -   We can't use try_lock() here.
     //  -   Have History stores a clone of its inner HistoryImpl.  Then we can access that freely.
 
-    let runtime = RUNTIME.as_ref().map_err(|e| Error::from(e.kind()))?;
-
-    runtime.spawn(start_provider_server(Arc::clone(&history)));
-    runtime.spawn(start_manager_server(history));
+    RUNTIME.spawn(start_provider_server(Arc::clone(&history)));
+    RUNTIME.spawn(start_manager_server(history));
 
     Ok(())
 }
