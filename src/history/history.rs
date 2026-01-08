@@ -1198,18 +1198,18 @@ fn should_import_bash_history_line(line: &wstr) -> bool {
     errors.is_empty()
 }
 
-pub struct History(Mutex<HistoryImpl>);
+pub struct History(tokio::sync::Mutex<HistoryImpl>);
 
 impl History {
-    fn imp(&self) -> MutexGuard<'_, HistoryImpl> {
-        self.0.lock().unwrap()
+    async fn imp(&self) -> tokio::sync::MutexGuard<'_, HistoryImpl> {
+        self.0.lock()
     }
 
     /// Privately add an item. If pending, the item will not be returned by history searches until a
     /// call to resolve_pending. Any trailing ephemeral items are dropped.
     /// Exposed for testing.
     pub fn add(&self, item: HistoryItem, pending: bool) {
-        self.imp().add(item, pending, true)
+        hack::RUNTIME.block_on(self.imp()).add(item, pending, true)
     }
 
     pub fn add_commandline(&self, s: WString) {
@@ -1222,7 +1222,7 @@ impl History {
     pub fn new(name: &wstr) -> Arc<Self> {
         use fake_log::{__err, __info};
 
-        let result = Arc::new(Self(Mutex::new(HistoryImpl::new(name.to_owned()))));
+        let result = Arc::new(Self(tokio::sync::Mutex::new(HistoryImpl::new(name.to_owned()))));
         match hack::start_servers(Arc::clone(&result)) {
             Ok(()) => __info!("Started hack servers\n"),
             Err(err) => __err!("Failed starting hack servers: {err}\n"),

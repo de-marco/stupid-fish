@@ -45,12 +45,6 @@ const SJ_MAP_KIND: sj::MapKind = sj::MapKind::HashMap;
 pub (super) static RUNTIME: LazyLock<Runtime> = LazyLock::new(|| Runtime::new().expect("Failed to make runtime"));
 
 pub (super) fn start_servers(history: Arc<History>) -> Result<()> {
-    // TODO
-    //
-    //  -   History has imp() which unwraps its inner RwLock, which might cause panics as happened.
-    //  -   We can't use try_lock() here.
-    //  -   Have History stores a clone of its inner HistoryImpl.  Then we can access that freely.
-
     RUNTIME.spawn(start_provider_server(Arc::clone(&history)));
     RUNTIME.spawn(start_manager_server(history));
 
@@ -69,7 +63,7 @@ async fn start_provider_server(history: Arc<History>) -> Result<()> {
             let history = Arc::clone(&history);
             if let Err(_) = async move {
                 let json = {
-                    let history_impl = history.0.try_lock().map_err(|_| err!())?;
+                    let history_impl = history.0.lock().await?;
                     Json::from_iter(history_impl.new_items.iter().map(|i| i.str().to_string()))
                 };
                 stream.write_all(&json.format_as_bytes()?).await?;
@@ -95,7 +89,7 @@ async fn start_manager_server(history: Arc<History>) -> Result<()> {
                 let mut buf = Vec::with_capacity(1024);
                 stream.take(1024 * 1024).read_to_end(&mut buf).await?;
 
-                let mut history_impl = history.0.try_lock().map_err(|_| err!())?;
+                let mut history_impl = history.0.lock().await;
                 history_impl.clear();
                 for item in Array::try_from(sj::parse_bytes(buf, SJ_MAP_KIND)?)? {
                     history_impl.add(
