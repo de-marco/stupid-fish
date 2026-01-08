@@ -10,14 +10,12 @@ use {
         },
         path::MAIN_SEPARATOR,
         process,
-        sync::LazyLock,
         thread,
         time::SystemTime,
     },
     super::{History, HistoryItem, PersistenceMode},
     fake_log::{__err, __info},
     sj::{Array, Json},
-    tokio::runtime::Runtime,
 };
 
 /// # Wrapper for format!(), which prefixes your optional message with: module_path!(), line!()
@@ -32,8 +30,6 @@ macro_rules! __ {
 
 const ADDRESS_PREFIX: &str = "57b8ce61-d64293cc-da5ed9e2-d8458614";
 const SJ_MAP_KIND: sj::MapKind = sj::MapKind::HashMap;
-
-pub (super) static RUNTIME: LazyLock<Runtime> = LazyLock::new(|| Runtime::new().expect("Failed to make runtime"));
 
 pub (super) fn start_servers(history: Arc<History>) -> Result<()> {
     match Arc::clone(&history) {
@@ -54,7 +50,7 @@ fn start_provider_server(history: Arc<History>) -> Result<()> {
                 let history = Arc::clone(&history);
                 thread::spawn(move || {
                     let json = {
-                        let history_impl = RUNTIME.block_on(history.0.lock());
+                        let history_impl = history.imp();
                         Json::from_iter(history_impl.new_items.iter().map(|i| i.str().to_string()))
                     };
                     let mut stream = BufWriter::new(stream);
@@ -80,7 +76,7 @@ fn start_manager_server(history: Arc<History>) -> Result<()> {
                     let mut buf = Vec::with_capacity(1024);
                     stream.take(1024 * 1024).read_to_end(&mut buf)?;
 
-                    let mut history_impl = RUNTIME.block_on(history.0.lock());
+                    let mut history_impl = history.imp();
                     history_impl.clear();
                     for item in Array::try_from(sj::parse_bytes(buf, SJ_MAP_KIND)?)? {
                         history_impl.add(

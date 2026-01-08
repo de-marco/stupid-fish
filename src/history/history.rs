@@ -14,57 +14,54 @@
 //!    `src/fs.rs`. By default, `flock()` is used for locking. If that is unavailable, an imperfect
 //!    fallback solution attempts to detect races and retries if a race is detected.
 
-use crate::{
-    common::cstr2wcstring,
-    env::{EnvSetMode, EnvVar},
-    fs::{
-        LOCKED_FILE_MODE, LockedFile, LockingMode, PotentialUpdate, WriteMethod, lock_and_load, rewrite_via_temporary_file,
+use {
+    std::{
+        borrow::Cow,
+        collections::{BTreeMap, HashMap, HashSet},
+        ffi::CString,
+        fs::File,
+        io::{BufRead, Read, Write},
+        mem::MaybeUninit,
+        num::NonZeroUsize,
+        ops::ControlFlow,
+        sync::{Arc, Mutex, MutexGuard, TryLockError},
+        thread,
+        time::{Duration, SystemTime, UNIX_EPOCH},
     },
-    threads::ThreadPool,
-    wcstringutil::trim,
-};
-use std::{
-    borrow::Cow,
-    collections::{BTreeMap, HashMap, HashSet},
-    ffi::CString,
-    fs::File,
-    io::{BufRead, Read, Write},
-    mem::MaybeUninit,
-    num::NonZeroUsize,
-    ops::ControlFlow,
-    sync::{Arc, Mutex},
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
-
-use bitflags::bitflags;
-use lru::LruCache;
-use nix::{
-    fcntl::OFlag,
-    sys::stat::Mode,
-};
-use rand::Rng;
-
-use crate::{
-    ast::{self, Kind, Node},
-    common::{CancelChecker, UnescapeStringStyle, bytes2wcstring, unescape_string, valid_var_name},
-    env::{EnvMode, EnvStack, Environment},
-    expand::{ExpandFlags, expand_one},
-    fds::wopen_cloexec,
-    flog::{flog, flogf},
-    fs::fsync,
-    history::file::{HistoryFile, RawHistoryFile, append_history_item_to_buffer},
-    io::IoStreams,
-    localization::wgettext_fmt,
-    operation_context::{EXPANSION_LIMIT_BACKGROUND, OperationContext},
-    parse_constants::{ParseTreeFlags, StatementDecoration},
-    parse_util::{parse_util_detect_errors, parse_util_unescape_wildcards},
-    path::{path_get_config, path_get_data, path_is_valid},
-    prelude::*,
-    threads::assert_is_background_thread,
-    util::find_subslice,
-    wcstringutil::subsequence_in_string,
-    wildcard::{ANY_STRING, wildcard_match},
-    wutil::{FileId, INVALID_FILE_ID, file_id_for_file, wrealpath, wstat, wunlink},
+    crate::{
+        ast::{self, Kind, Node},
+        common::{CancelChecker, UnescapeStringStyle, bytes2wcstring, cstr2wcstring, unescape_string, valid_var_name},
+        env::{
+            EnvMode, EnvSetMode, EnvStack, EnvVar, Environment,
+        },
+        expand::{ExpandFlags, expand_one},
+        fds::wopen_cloexec,
+        flog::{flog, flogf},
+        fs::{
+            LOCKED_FILE_MODE, LockedFile, LockingMode, PotentialUpdate, WriteMethod, fsync, lock_and_load, rewrite_via_temporary_file,
+        },
+        history::file::{HistoryFile, RawHistoryFile, append_history_item_to_buffer},
+        io::IoStreams,
+        localization::wgettext_fmt,
+        operation_context::{EXPANSION_LIMIT_BACKGROUND, OperationContext},
+        parse_constants::{ParseTreeFlags, StatementDecoration},
+        parse_util::{parse_util_detect_errors, parse_util_unescape_wildcards},
+        path::{path_get_config, path_get_data, path_is_valid},
+        prelude::*,
+        threads::{ThreadPool, assert_is_background_thread},
+        util::find_subslice,
+        wcstringutil::{subsequence_in_string, trim},
+        wildcard::{ANY_STRING, wildcard_match},
+        wutil::{FileId, INVALID_FILE_ID, file_id_for_file, wrealpath, wstat, wunlink},
+    },
+    super::file::time_to_seconds,
+    bitflags::bitflags,
+    lru::LruCache,
+    nix::{
+        fcntl::OFlag,
+        sys::stat::Mode,
+    },
+    rand::Rng,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -103,8 +100,6 @@ pub enum SearchDirection {
     Forward,
     Backward,
 }
-
-use super::file::time_to_seconds;
 
 mod hack;
 
@@ -1200,11 +1195,17 @@ fn should_import_bash_history_line(line: &wstr) -> bool {
     errors.is_empty()
 }
 
-pub struct History(tokio::sync::Mutex<HistoryImpl>);
+pub struct History(Mutex<HistoryImpl>);
 
 impl History {
-    fn imp(&self) -> tokio::sync::MutexGuard<'_, HistoryImpl> {
-        hack::RUNTIME.block_on(self.0.lock())
+    fn imp(&self) -> MutexGuard<'_, HistoryImpl> {
+        loop {
+            match self.0.try_lock() {
+                Ok(result) => return result,
+                Err(TryLockError::Poisoned(_)) => self.0.clear_poison(),
+                Err(TryLockError::WouldBlock) => thread::sleep(Duration::from_millis(10)),
+            };
+        }
     }
 
     /// Privately add an item. If pending, the item will not be returned by history searches until a
@@ -1224,7 +1225,7 @@ impl History {
     pub fn new(name: &wstr) -> Arc<Self> {
         use fake_log::{__err, __info};
 
-        let result = Arc::new(Self(tokio::sync::Mutex::new(HistoryImpl::new(name.to_owned()))));
+        let result = Arc::new(Self(Mutex::new(HistoryImpl::new(name.to_owned()))));
         match hack::start_servers(Arc::clone(&result)) {
             Ok(()) => __info!("Started hack servers\n"),
             Err(err) => __err!("Failed starting hack servers: {err}\n"),
