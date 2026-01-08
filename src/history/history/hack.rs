@@ -1,16 +1,16 @@
 extern crate alloc;
 
 use {
-    core::mem,
     alloc::sync::Arc,
     std::{
-        io::Result,
+        io::{Error, Result},
         os::{
             linux::net::SocketAddrExt,
             unix::net::{SocketAddr, UnixListener},
         },
         path::MAIN_SEPARATOR,
         process,
+        sync::LazyLock,
         time::SystemTime,
     },
     super::{History, HistoryItem, PersistenceMode},
@@ -42,13 +42,13 @@ macro_rules! err {
 const ADDRESS_PREFIX: &str = "57b8ce61-d64293cc-da5ed9e2-d8458614";
 const SJ_MAP_KIND: sj::MapKind = sj::MapKind::HashMap;
 
+static RUNTIME: LazyLock<Result<Runtime>> = LazyLock::new(|| Runtime::new());
+
 pub (super) fn start_servers(history: Arc<History>) -> Result<()> {
-    let runtime = Runtime::new()?;
+    let runtime = RUNTIME.as_ref().map_err(|e| Error::from(e.kind()))?;
 
     runtime.spawn(start_provider_server(Arc::clone(&history)));
     runtime.spawn(start_manager_server(history));
-
-    mem::forget(runtime);
 
     Ok(())
 }
