@@ -16,6 +16,8 @@ use {
 #[cfg(test)]
 mod tests;
 
+pub static GLOBAL: LazyLock<Arc<RwLock<History>>> = LazyLock::new(|| Arc::new(RwLock::new(History::new(99))));
+
 #[derive(Debug, Clone)]
 pub struct History {
     // path → last visit time
@@ -26,8 +28,6 @@ pub struct History {
 }
 
 impl History {
-
-    pub const GLOBAL: LazyLock<Arc<RwLock<Self>>> = LazyLock::new(|| Arc::new(RwLock::new(Self::new(99))));
 
     fn new(max_size: usize) -> Self {
         Self {
@@ -71,12 +71,12 @@ impl History {
 
 pub (super) fn add<S>(path: S) where S: Into<String> {
     loop {
-        match History::GLOBAL.try_write() {
+        match GLOBAL.try_write() {
             Ok(mut history) => {
                 history.add(path);
                 return;
             },
-            Err(TryLockError::Poisoned(_)) => History::GLOBAL.clear_poison(),
+            Err(TryLockError::Poisoned(_)) => GLOBAL.clear_poison(),
             Err(TryLockError::WouldBlock) => thread::sleep(Duration::from_millis(10)),
         };
     }

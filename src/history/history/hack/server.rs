@@ -116,13 +116,12 @@ fn start_cd_history_provider_server(address: SocketAddr) -> Result<()> {
                 thread::spawn(move || {
                     if let Err(err) = (|| {
                         let json = {
-                            let history = crate::builtins::cd::history::History::GLOBAL;
                             let history = {
                                 let start = Instant::now();
                                 loop {
-                                    match history.try_read() {
+                                    match crate::builtins::cd::history::GLOBAL.try_read() {
                                         Ok(history) => break history,
-                                        Err(TryLockError::Poisoned(_)) => history.clear_poison(),
+                                        Err(TryLockError::Poisoned(_)) => crate::builtins::cd::history::GLOBAL.clear_poison(),
                                         Err(TryLockError::WouldBlock) => thread::sleep(Duration::from_millis(10)),
                                     };
                                     if Instant::now().checked_duration_since(start).map(|d| d >= Duration::from_secs(1)).unwrap_or(true) {
