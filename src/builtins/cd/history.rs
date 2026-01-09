@@ -1,11 +1,16 @@
 extern crate alloc;
 
 use {
+    core::time::Duration,
     alloc::{
         collections::BTreeMap,
         sync::Arc,
     },
-    std::time::SystemTime,
+    std::{
+        sync::{LazyLock, RwLock, TryLockError},
+        thread,
+        time::SystemTime,
+    },
 };
 
 #[cfg(test)]
@@ -21,6 +26,8 @@ pub struct History {
 }
 
 impl History {
+
+    pub const GLOBAL: LazyLock<Arc<RwLock<Self>>> = LazyLock::new(|| Arc::new(RwLock::new(Self::new(99))));
 
     fn new(max_size: usize) -> Self {
         Self {
@@ -60,4 +67,17 @@ impl History {
         self.by_time.len()
     }
 
+}
+
+pub (super) fn add<S>(path: S) where S: Into<String> {
+    loop {
+        match History::GLOBAL.try_write() {
+            Ok(mut history) => {
+                history.add(path);
+                return;
+            },
+            Err(TryLockError::Poisoned(_)) => History::GLOBAL.clear_poison(),
+            Err(TryLockError::WouldBlock) => thread::sleep(Duration::from_millis(10)),
+        };
+    }
 }

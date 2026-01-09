@@ -130,6 +130,7 @@ pub fn cd(parser: &Parser, streams: &mut IoStreams, args: &mut [&wstr]) -> Built
         // Stash the fd for the cwd in the parser.
         parser.libdata_mut().cwd_fd = Some(dir_fd);
 
+        history::add(&*norm_dir);
         parser.set_var_and_fire(
             L!("PWD"),
             ParserEnvSetMode::new(EnvMode::EXPORT | EnvMode::GLOBAL),
