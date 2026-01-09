@@ -11,7 +11,7 @@ use {
         path::MAIN_SEPARATOR,
         process,
         thread,
-        time::SystemTime,
+        time::{SystemTime, UNIX_EPOCH},
     },
     super::super::{History, HistoryItem, PersistenceMode},
     fake_log::{__err, __info},
@@ -48,7 +48,7 @@ impl Server {
         match self {
             Self::Provider => start_provider_server(make_addr()?, history),
             Self::Manager => start_manager_server(make_addr()?, history),
-            Self::CdHistoryProvider => todo!(),
+            Self::CdHistoryProvider => start_cd_history_provider_server(make_addr()?),
         }
     }
 
@@ -99,6 +99,30 @@ fn start_manager_server(address: SocketAddr, history: Arc<History>) -> Result<()
                         );
                     }
                     Result::Ok(())
+                });
+            },
+            Err(err) => __err!("{}", __!("Failed: {err}\n")),
+        };
+    }
+}
+
+fn start_cd_history_provider_server(address: SocketAddr) -> Result<()> {
+    let listener = UnixListener::bind_addr(&address)?;
+    loop {
+        match listener.accept() {
+            Ok((stream, _)) => {
+                thread::spawn(move || {
+                    let json = {
+                        let history = crate::builtins::cd::history::History::GLOBAL;
+                        let history = history.try_read().map_err(|e| err!("{e}"))?;
+                        Json::from_iter(history.recents().map(|(time, path)| Json::from_iter([
+                            Json::from(time.duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(u64::MIN)),
+                            Json::from(path.to_string()),
+                        ])))
+                    };
+                    let mut stream = BufWriter::new(stream);
+                    stream.write_all(&json.format_as_bytes()?)?;
+                    stream.flush()
                 });
             },
             Err(err) => __err!("{}", __!("Failed: {err}\n")),

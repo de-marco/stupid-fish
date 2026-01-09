@@ -20,6 +20,13 @@ macro_rules! __ {
     };
 }
 
+/// # Makes new std::io::Error
+macro_rules! err {
+    ($kind: path, $($arg: tt)+) => { std::io::Error::new($kind, __!($($arg)+)) };
+    ($($arg: tt)+) => { err!(std::io::ErrorKind::Other, $($arg)+) };
+    () => { std::io::Error::new(std::io::ErrorKind::Other, __!()) };
+}
+
 mod server;
 
 pub (super) fn start_servers(history: Arc<History>) -> Result<()> {

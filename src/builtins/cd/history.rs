@@ -59,8 +59,8 @@ impl History {
     }
 
     /// Returns iterator over entries in **most recent first** order
-    pub fn recents(&self) -> impl Iterator<Item = (&str, SystemTime)> + '_ {
-        self.by_time.iter().rev().map(|(time, path)| (path.as_str(), *time))
+    pub fn recents(&self) -> impl Iterator<Item = (SystemTime, &str)> + '_ {
+        self.by_time.iter().rev().map(|(time, path)| (*time, path.as_str()))
     }
 
     pub fn len(&self) -> usize {
