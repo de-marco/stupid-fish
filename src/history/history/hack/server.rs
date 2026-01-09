@@ -1,6 +1,7 @@
 extern crate alloc;
 
 use {
+    core::time::Duration,
     alloc::sync::Arc,
     std::{
         io::{BufReader, BufWriter, Read, Result, Write},
@@ -10,8 +11,9 @@ use {
         },
         path::MAIN_SEPARATOR,
         process,
+        sync::TryLockError,
         thread,
-        time::{SystemTime, UNIX_EPOCH},
+        time::{Instant, SystemTime, UNIX_EPOCH},
     },
     super::super::{History, HistoryItem, PersistenceMode},
     fake_log::{__err, __info},
@@ -70,7 +72,7 @@ fn start_provider_server(address: SocketAddr, history: Arc<History>) -> Result<(
                     stream.flush()
                 });
             },
-            Err(err) => __err!("{}", __!("Failed: {err}\n")),
+            Err(err) => __err!("{}", __!("{err}\n")),
         };
     }
 }
@@ -101,7 +103,7 @@ fn start_manager_server(address: SocketAddr, history: Arc<History>) -> Result<()
                     Result::Ok(())
                 });
             },
-            Err(err) => __err!("{}", __!("Failed: {err}\n")),
+            Err(err) => __err!("{}", __!("{err}\n")),
         };
     }
 }
@@ -112,20 +114,36 @@ fn start_cd_history_provider_server(address: SocketAddr) -> Result<()> {
         match listener.accept() {
             Ok((stream, _)) => {
                 thread::spawn(move || {
-                    let json = {
-                        let history = crate::builtins::cd::history::History::GLOBAL;
-                        let history = history.try_read().map_err(|e| err!("{e}"))?;
-                        Json::from_iter(history.recents().map(|(time, path)| Json::from_iter([
-                            Json::from(time.duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(u64::MIN)),
-                            Json::from(path.to_string()),
-                        ])))
-                    };
-                    let mut stream = BufWriter::new(stream);
-                    stream.write_all(&json.format_as_bytes()?)?;
-                    stream.flush()
+                    if let Err(err) = (|| {
+                        let json = {
+                            let history = crate::builtins::cd::history::History::GLOBAL;
+                            let history = {
+                                let start = Instant::now();
+                                loop {
+                                    match history.try_read() {
+                                        Ok(history) => break history,
+                                        Err(TryLockError::Poisoned(_)) => history.clear_poison(),
+                                        Err(TryLockError::WouldBlock) => thread::sleep(Duration::from_millis(10)),
+                                    };
+                                    if Instant::now().checked_duration_since(start).map(|d| d >= Duration::from_secs(1)).unwrap_or(true) {
+                                        return Err(err!("Timed out waiting to read global history"));
+                                    }
+                                }
+                            };
+                            Json::from_iter(history.recents().map(|(time, path)| Json::from_iter([
+                                Json::from(time.duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(u64::MIN)),
+                                Json::from(path.to_string()),
+                            ])))
+                        };
+                        let mut stream = BufWriter::new(stream);
+                        stream.write_all(&json.format_as_bytes()?)?;
+                        stream.flush()
+                    })() {
+                        __err!("{}", __!("{err}\n"));
+                    }
                 });
             },
-            Err(err) => __err!("{}", __!("Failed: {err}\n")),
+            Err(err) => __err!("{}", __!("{err}\n")),
         };
     }
 }
