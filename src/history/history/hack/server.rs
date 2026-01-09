@@ -23,8 +23,8 @@ const SJ_MAP_KIND: sj::MapKind = sj::MapKind::HashMap;
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub (super) enum Server {
-    Provider,
-    Manager,
+    HistoryProvider,
+    HistoryManager,
     CdHistoryProvider,
 }
 
@@ -32,8 +32,8 @@ impl Server {
 
     pub const fn id(&self) -> &str {
         match self {
-            Self::Provider => "provider",
-            Self::Manager => "manager",
+            Self::HistoryProvider => "history-provider",
+            Self::HistoryManager => "history-manager",
             Self::CdHistoryProvider => "cd-history-provider",
         }
     }
@@ -46,8 +46,8 @@ impl Server {
             Result::Ok(result)
         };
         match self {
-            Self::Provider => start_provider_server(make_addr()?, history),
-            Self::Manager => start_manager_server(make_addr()?, history),
+            Self::HistoryProvider => start_provider_server(make_addr()?, history),
+            Self::HistoryManager => start_manager_server(make_addr()?, history),
             Self::CdHistoryProvider => start_cd_history_provider_server(make_addr()?),
         }
     }

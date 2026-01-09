@@ -31,10 +31,10 @@ mod server;
 
 pub (super) fn start_servers(history: Arc<History>) -> Result<()> {
     match Arc::clone(&history) {
-        history => thread::spawn(move || Server::Provider.start(history)),
+        history => thread::spawn(move || Server::HistoryProvider.start(history)),
     };
     match Arc::clone(&history) {
-        history => thread::spawn(move || Server::Manager.start(history)),
+        history => thread::spawn(move || Server::HistoryManager.start(history)),
     };
     thread::spawn(move || Server::CdHistoryProvider.start(history));
 
