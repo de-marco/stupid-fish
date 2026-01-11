@@ -108,8 +108,7 @@ async fn start_manager_server(listener: UnixListener, history: Arc<History>) -> 
                             );
                         }
                         Result::Ok(())
-                    }).await??;
-                    Result::Ok(())
+                    }).await?
                 });
             },
             Err(err) => __err!("{}", __!("{err}\n")),
