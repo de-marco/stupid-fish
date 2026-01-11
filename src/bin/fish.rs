@@ -362,6 +362,9 @@ fn main() {
             return fish_indent::main();
         }
     }
+    if let Ok(current_dir) = env::current_dir() {
+        fish::builtins::cd::history::add(current_dir.display().to_string());
+    }
     PROGRAM_NAME.set(L!("fish")).unwrap();
     if !cfg!(small_main_stack) {
         panic_handler(throwing_main);

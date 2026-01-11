@@ -63,13 +63,9 @@ impl History {
         self.by_time.iter().rev().map(|(time, path)| (*time, path.as_str()))
     }
 
-    pub fn len(&self) -> usize {
-        self.by_time.len()
-    }
-
 }
 
-pub (super) fn add<S>(path: S) where S: Into<String> {
+pub fn add<S>(path: S) where S: Into<String> {
     loop {
         match GLOBAL.try_write() {
             Ok(mut history) => {
