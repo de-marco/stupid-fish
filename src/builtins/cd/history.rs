@@ -7,6 +7,7 @@ use {
         sync::Arc,
     },
     std::{
+        collections::HashMap,
         sync::{LazyLock, RwLock, TryLockError},
         thread,
         time::SystemTime,
@@ -21,7 +22,7 @@ pub static GLOBAL: LazyLock<Arc<RwLock<History>>> = LazyLock::new(|| Arc::new(Rw
 #[derive(Debug, Clone)]
 pub struct History {
     // path → last visit time
-    by_path: BTreeMap<Arc<String>, SystemTime>,
+    by_path: HashMap<Arc<String>, SystemTime>,
     // time → path   (BTreeMap sorts by time ascending → oldest first)
     by_time: BTreeMap<SystemTime, Arc<String>>,
     max_size: usize,
@@ -31,7 +32,7 @@ impl History {
 
     fn new(max_size: usize) -> Self {
         Self {
-            by_path: BTreeMap::new(),
+            by_path: HashMap::with_capacity(max_size.min(99)),
             by_time: BTreeMap::new(),
             max_size: max_size.max(1),
         }
