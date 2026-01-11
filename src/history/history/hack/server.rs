@@ -7,7 +7,7 @@ use {
         io::Result,
         os::{
             linux::net::SocketAddrExt,
-            unix::net::{SocketAddr, UnixListener},
+            unix::net::SocketAddr,
         },
         path::MAIN_SEPARATOR,
         process,
@@ -20,6 +20,7 @@ use {
     sj::{Array, Json},
     tokio::{
         io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
+        net::UnixListener,
         task,
     },
 };
@@ -45,23 +46,26 @@ impl Server {
     }
 
     pub async fn start(&self, history: Arc<History>) -> Result<()> {
-        let make_addr = || {
-            let raw_addr = format!("{process_id}{MAIN_SEPARATOR}{ADDRESS_PREFIX}{MAIN_SEPARATOR}{id}", process_id=process::id(), id=self.id());
-            let result = SocketAddr::from_abstract_name(&raw_addr)?;
-            __info!("-> {raw_addr}\n");
-            Result::Ok(result)
+        let bind = || {
+            let raw_address = format!(
+                "{process_id}{MAIN_SEPARATOR}{ADDRESS_PREFIX}{MAIN_SEPARATOR}{id}", process_id=process::id(), id=self.id(),
+            );
+            let address = SocketAddr::from_abstract_name(&raw_address)?;
+            __info!("-> {raw_address}\n");
+            let listener = std::os::unix::net::UnixListener::bind_addr(&address)?;
+            listener.set_nonblocking(true)?;
+            listener.try_into()
         };
         match self {
-            Self::HistoryProvider => start_provider_server(make_addr()?, history).await,
-            Self::HistoryManager => start_manager_server(make_addr()?, history).await,
-            Self::CdHistoryProvider => start_cd_history_provider_server(make_addr()?).await,
+            Self::HistoryProvider => start_provider_server(bind()?, history).await,
+            Self::HistoryManager => start_manager_server(bind()?, history).await,
+            Self::CdHistoryProvider => start_cd_history_provider_server(bind()?).await,
         }
     }
 
 }
 
-async fn start_provider_server(address: SocketAddr, history: Arc<History>) -> Result<()> {
-    let listener = bind_addr(&address)?;
+async fn start_provider_server(listener: UnixListener, history: Arc<History>) -> Result<()> {
     loop {
         match listener.accept().await {
             Ok((stream, _)) => {
@@ -81,8 +85,7 @@ async fn start_provider_server(address: SocketAddr, history: Arc<History>) -> Re
     }
 }
 
-async fn start_manager_server(address: SocketAddr, history: Arc<History>) -> Result<()> {
-    let listener = bind_addr(&address)?;
+async fn start_manager_server(listener: UnixListener, history: Arc<History>) -> Result<()> {
     loop {
         match listener.accept().await {
             Ok((stream, _)) => {
@@ -114,8 +117,7 @@ async fn start_manager_server(address: SocketAddr, history: Arc<History>) -> Res
     }
 }
 
-async fn start_cd_history_provider_server(address: SocketAddr) -> Result<()> {
-    let listener = bind_addr(&address)?;
+async fn start_cd_history_provider_server(listener: UnixListener) -> Result<()> {
     loop {
         match listener.accept().await {
             Ok((stream, _)) => {
@@ -148,10 +150,4 @@ async fn start_cd_history_provider_server(address: SocketAddr) -> Result<()> {
             Err(err) => __err!("{}", __!("{err}\n")),
         };
     }
-}
-
-fn bind_addr(address: &SocketAddr) -> Result<tokio::net::UnixListener> {
-    let listener = UnixListener::bind_addr(&address)?;
-    listener.set_nonblocking(true)?;
-    listener.try_into()
 }
