@@ -92,6 +92,8 @@ readme = "README.rst"
 fake-log = { version='>= 0.1, < 0.2', registry='local' }
 sj = { version='>= 2, < 3', features=['std'] }
 
+tokio = { version='>= 1.48, < 2', features=['io-util', 'net', 'rt-multi-thread', 'sync'] }
+
 bitflags.workspace = true
 cfg-if.workspace = true
 errno.workspace = true

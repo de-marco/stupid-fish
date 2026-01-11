@@ -1,13 +1,17 @@
 extern crate alloc;
 
 use {
+    core::mem,
     alloc::sync::Arc,
     std::{
         io::Result,
+        sync::OnceLock,
         thread,
     },
     super::History,
     self::server::Server,
+    fake_log::__err,
+    tokio::runtime::Runtime,
 };
 
 /// # Wrapper for format!(), which prefixes your optional message with: module_path!(), line!()
@@ -30,13 +34,21 @@ macro_rules! err {
 mod server;
 
 pub (super) fn start_servers(history: Arc<History>) -> Result<()> {
-    match Arc::clone(&history) {
-        history => thread::spawn(move || Server::HistoryProvider.start(history)),
-    };
-    match Arc::clone(&history) {
-        history => thread::spawn(move || Server::HistoryManager.start(history)),
-    };
-    thread::spawn(move || Server::CdHistoryProvider.start(history));
+    static RUNTIME_THREAD: OnceLock<()> = OnceLock::new();
+
+    RUNTIME_THREAD.get_or_init(move || {
+        thread::spawn(move || {
+            match Runtime::new() {
+                Ok(runtime) => {
+                    runtime.spawn(Server::HistoryProvider.start(Arc::clone(&history)));
+                    runtime.spawn(Server::HistoryManager.start(Arc::clone(&history)));
+                    runtime.spawn(Server::CdHistoryProvider.start(history));
+                    mem::forget(runtime);
+                },
+                Err(err) => __err!("Failed making new runtime: {err}\n"),
+            };
+        });
+    });
 
     Ok(())
 }
