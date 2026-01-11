@@ -1,11 +1,10 @@
 extern crate alloc;
 
 use {
-    core::mem,
     alloc::sync::Arc,
     std::{
         io::Result,
-        sync::OnceLock,
+        sync::{LazyLock, OnceLock},
         thread,
     },
     super::History,
@@ -38,12 +37,12 @@ pub (super) fn start_servers(history: Arc<History>) -> Result<()> {
 
     RUNTIME_THREAD.get_or_init(move || {
         thread::spawn(move || {
-            match Runtime::new() {
+            static RUNTIME: LazyLock<Result<Runtime>> = LazyLock::new(|| Runtime::new());
+            match RUNTIME.as_ref() {
                 Ok(runtime) => {
                     runtime.spawn(Server::HistoryProvider.start(Arc::clone(&history)));
                     runtime.spawn(Server::HistoryManager.start(Arc::clone(&history)));
                     runtime.spawn(Server::CdHistoryProvider.start(history));
-                    mem::forget(runtime);
                 },
                 Err(err) => __err!("Failed making new runtime: {err}\n"),
             };
