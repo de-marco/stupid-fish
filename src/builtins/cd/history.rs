@@ -8,10 +8,12 @@ use {
     },
     std::{
         collections::HashMap,
+        env,
         sync::{LazyLock, RwLock, TryLockError},
         thread,
         time::SystemTime,
     },
+    fake_log::__err,
 };
 
 #[cfg(test)]
@@ -66,7 +68,18 @@ impl History {
 
 }
 
-pub fn add<S>(path: S) where S: Into<String> {
+pub fn setup() {
+    match GLOBAL.try_write() {
+        Ok(mut history) => if history.by_time.is_empty() {
+            if let Ok(current_dir) = env::current_dir() {
+                history.add(current_dir.display().to_string());
+            }
+        },
+        Err(err) => __err!("Failed setting up global CD history: {err}\n"),
+    };
+}
+
+pub (super) fn add<S>(path: S) where S: Into<String> {
     loop {
         match GLOBAL.try_write() {
             Ok(mut history) => {
