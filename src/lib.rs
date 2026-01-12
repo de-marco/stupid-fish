@@ -1,6 +1,23 @@
 #![cfg_attr(feature = "benchmark", feature(test))]
 #![allow(non_camel_case_types)]
 
+/// # Wrapper for format!(), which prefixes your optional message with: module_path!(), line!()
+macro_rules! __ {
+    ($($arg: tt)+) => {
+        format!("[{module_path}-{line}] {msg}", module_path=module_path!(), line=line!(), msg=format!($($arg)+))
+    };
+    () => {
+        __!("(internal error)")
+    };
+}
+
+/// # Makes new std::io::Error
+macro_rules! err {
+    ($kind: path, $($arg: tt)+) => { std::io::Error::new($kind, __!($($arg)+)) };
+    ($($arg: tt)+) => { err!(std::io::ErrorKind::Other, $($arg)+) };
+    () => { std::io::Error::new(std::io::ErrorKind::Other, __!()) };
+}
+
 pub const BUILD_VERSION: &str = env!("FISH_BUILD_VERSION");
 
 #[macro_use]
