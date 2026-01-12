@@ -20,25 +20,25 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 use fish::{
     ast,
     builtins::{
-        fish_indent, fish_key_reader,
+        fish_indent,
+        fish_key_reader,
         shared::{
-            BUILTIN_ERR_MISSING, BUILTIN_ERR_UNEXP_ARG, BUILTIN_ERR_UNKNOWN, STATUS_CMD_ERROR,
-            STATUS_CMD_OK, STATUS_CMD_UNKNOWN,
+            BUILTIN_ERR_MISSING, BUILTIN_ERR_UNEXP_ARG, BUILTIN_ERR_UNKNOWN, STATUS_CMD_ERROR, STATUS_CMD_OK, STATUS_CMD_UNKNOWN,
         },
     },
-    common::{
-        PACKAGE_NAME, PROFILING_ACTIVE, PROGRAM_NAME, bytes2wcstring, escape,
-        save_term_foreground_process_group, wcs2bytes,
-    },
+    common::{PACKAGE_NAME, PROFILING_ACTIVE, PROGRAM_NAME, bytes2wcstring, escape, save_term_foreground_process_group, wcs2bytes},
     env::{
-        EnvMode, Statuses,
+        EnvMode,
+        Statuses,
         config_paths::ConfigPaths,
         environment::{EnvStack, Environment, env_init},
     },
     eprintf,
     event::{self, Event},
     flog::{self, activate_flog_categories_by_pattern, flog, flogf, set_flog_file_fd},
-    fprintf, function, future_feature_flags as features,
+    fprintf,
+    function,
+    future_feature_flags as features,
     history::{self, start_private_mode},
     io::IoChain,
     locale::set_libc_locales,
@@ -51,13 +51,12 @@ use fish::{
     path::path_get_config,
     prelude::*,
     printf,
-    proc::{
-        Pid, get_login, is_interactive_session, mark_login, mark_no_exec, proc_init,
-        set_interactive_session,
+    proc::{Pid, get_login, is_interactive_session, mark_login, mark_no_exec, proc_init, set_interactive_session},
+    reader::{
+        reader_init, reader_read, term_copy_modes,
     },
-    reader::{reader_init, reader_read, term_copy_modes},
     signal::{signal_clear_cancel, signal_unblock_all},
-    threads::{self},
+    threads,
     topic_monitor,
     wutil::waccess,
 };
@@ -68,7 +67,10 @@ use std::os::unix::prelude::*;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use std::{env, ops::ControlFlow};
+use std::{
+    env,
+    ops::ControlFlow,
+};
 
 /// container to hold the options specified within the command line
 #[derive(Default, Debug)]
@@ -215,7 +217,12 @@ fn run_command_list(parser: &Parser, cmds: &[OsString]) -> Result<(), libc::c_in
 }
 
 fn fish_parse_opt(args: &mut [WString], opts: &mut FishCmdOpts) -> ControlFlow<i32, usize> {
-    use fish::wgetopt::{ArgType::*, WGetopter, WOption, wopt};
+    use fish::wgetopt::{
+        ArgType::*,
+        WGetopter,
+        WOption,
+        wopt,
+    };
 
     const RUSAGE_ARG: char = 1 as char;
     const PRINT_DEBUG_CATEGORIES_ARG: char = 2 as char;
@@ -352,6 +359,16 @@ fn fish_parse_opt(args: &mut [WString], opts: &mut FishCmdOpts) -> ControlFlow<i
     ControlFlow::Continue(optind)
 }
 
+use {
+    std::{
+        sync::LazyLock,
+        thread::{self, ThreadId},
+    },
+    fake_log::__info,
+};
+
+static MAIN_THREAD_ID: LazyLock<ThreadId> = LazyLock::new(|| thread::current().id());
+
 fn main() {
     // If we are called as "/path/to/fish_key_reader", become fish_key_reader.
     if let Some(name) = env::args_os().next() {
@@ -363,6 +380,7 @@ fn main() {
         }
     }
 
+    __info!("Main thread ID: {:?}\n", *MAIN_THREAD_ID);
     fish::builtins::cd::history::setup();
 
     PROGRAM_NAME.set(L!("fish")).unwrap();
