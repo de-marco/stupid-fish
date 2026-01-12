@@ -185,6 +185,7 @@ dependencies = [
  "libc",
  "lru",
  "macro_rules_attribute",
+ "nairud",
  "nix",
  "num-traits",
  "once_cell",
@@ -198,6 +199,7 @@ dependencies = [
  "sj",
  "terminfo",
  "tokio",
+ "uds",
  "unix_path",
  "widestring",
  "xterm-color",
@@ -461,6 +463,12 @@ dependencies = [
  "wasi",
  "windows-sys 0.61.2",
 ]
+
+[[package]]
+name = "nairud"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1399fbc1ae85c46c31d4970243be8e1eae61e95e800f1d5af3174156e513286c"
 
 [[package]]
 name = "nix"
@@ -1005,6 +1013,16 @@ name = "typenum"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
+
+[[package]]
+name = "uds"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "885c31f06fce836457fe3ef09a59f83fe8db95d270b11cd78f40a4666c4d1661"
+dependencies = [
+ "libc",
+ "tokio",
+]
 
 [[package]]
 name = "unicode-ident"
