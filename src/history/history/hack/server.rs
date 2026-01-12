@@ -5,18 +5,12 @@ use {
     alloc::sync::Arc,
     std::{
         io::Result,
-        os::{
-            linux::net::SocketAddrExt,
-            unix::net::SocketAddr,
-        },
-        path::MAIN_SEPARATOR,
-        process,
         sync::TryLockError,
         thread,
         time::{Instant, SystemTime, UNIX_EPOCH},
     },
     super::super::{History, HistoryItem, PersistenceMode},
-    fake_log::{__err, __info},
+    fake_log::__err,
     sj::{Array, Json},
     tokio::{
         io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
@@ -25,7 +19,6 @@ use {
     },
 };
 
-const ADDRESS_PREFIX: &str = "57b8ce61-d64293cc-da5ed9e2-d8458614";
 const SJ_MAP_KIND: sj::MapKind = sj::MapKind::HashMap;
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Ord, PartialOrd)]
@@ -46,16 +39,7 @@ impl Server {
     }
 
     pub async fn start(&self, history: Arc<History>) -> Result<()> {
-        let bind = || {
-            let raw_address = format!(
-                "{process_id}{MAIN_SEPARATOR}{ADDRESS_PREFIX}{MAIN_SEPARATOR}{id}", process_id=process::id(), id=self.id(),
-            );
-            let address = SocketAddr::from_abstract_name(&raw_address)?;
-            __info!("-> {raw_address}\n");
-            let listener = std::os::unix::net::UnixListener::bind_addr(&address)?;
-            listener.set_nonblocking(true)?;
-            listener.try_into()
-        };
+        let bind = || crate::hack::bind(self.id());
         match self {
             Self::HistoryProvider => start_provider_server(bind()?, history).await,
             Self::HistoryManager => start_manager_server(bind()?, history).await,

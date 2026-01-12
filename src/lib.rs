@@ -18,6 +18,8 @@ macro_rules! err {
     () => { std::io::Error::new(std::io::ErrorKind::Other, __!()) };
 }
 
+pub mod hack;
+
 pub const BUILD_VERSION: &str = env!("FISH_BUILD_VERSION");
 
 #[macro_use]
@@ -101,5 +103,3 @@ pub extern crate fish_gettext_extraction;
 
 #[cfg(test)]
 mod tests;
-
-pub mod hack;
