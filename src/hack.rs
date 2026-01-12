@@ -17,7 +17,13 @@ static RUNTIME: OnceLock<Result<Arc<Runtime>>> = OnceLock::new();
 
 pub fn setup() {
     __info!("Main thread ID: {:?}\n", *MAIN_THREAD_ID);
-    thread::spawn(|| RUNTIME.get_or_init(|| Runtime::new().map(|r| Arc::new(r))));
+    thread::spawn(|| RUNTIME.get_or_init(|| {
+        if thread::current().id() != *MAIN_THREAD_ID {
+            Runtime::new().map(|r| Arc::new(r))
+        } else {
+            Err(err!("Cannot make new Runtime in main thread"))
+        }
+    }));
     crate::builtins::cd::history::setup();
 }
 
