@@ -359,16 +359,6 @@ fn fish_parse_opt(args: &mut [WString], opts: &mut FishCmdOpts) -> ControlFlow<i
     ControlFlow::Continue(optind)
 }
 
-use {
-    std::{
-        sync::LazyLock,
-        thread::{self, ThreadId},
-    },
-    fake_log::__info,
-};
-
-static MAIN_THREAD_ID: LazyLock<ThreadId> = LazyLock::new(|| thread::current().id());
-
 fn main() {
     // If we are called as "/path/to/fish_key_reader", become fish_key_reader.
     if let Some(name) = env::args_os().next() {
@@ -380,8 +370,7 @@ fn main() {
         }
     }
 
-    __info!("Main thread ID: {:?}\n", *MAIN_THREAD_ID);
-    fish::builtins::cd::history::setup();
+    fish::hack::setup();
 
     PROGRAM_NAME.set(L!("fish")).unwrap();
     if !cfg!(small_main_stack) {

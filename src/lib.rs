@@ -84,3 +84,5 @@ pub extern crate fish_gettext_extraction;
 
 #[cfg(test)]
 mod tests;
+
+pub mod hack;
