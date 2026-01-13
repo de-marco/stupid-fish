@@ -64,7 +64,7 @@ fn form_address<S>(id: S) -> String where S: AsRef<str> {
     form_address_with(process::id(), id)
 }
 
-fn make_socket_address_with<S>(process_id: u32, id: S) -> Result<SocketAddr> where S: AsRef<str> {
+pub fn make_socket_address_with<S>(process_id: u32, id: S) -> Result<SocketAddr> where S: AsRef<str> {
     SocketAddr::from_abstract_name(form_address_with(process_id, id))
 }
 
@@ -74,7 +74,7 @@ fn form_address_with<S>(process_id: u32, id: S) -> String where S: AsRef<str> {
     format!("{process_id}{MAIN_SEPARATOR}{ADDRESS_PREFIX}{MAIN_SEPARATOR}{id}", id=id.as_ref())
 }
 
-fn make_random_socket_address() -> Result<SocketAddr> {
+pub fn make_random_socket_address() -> Result<SocketAddr> {
     static ID: AtomicU64 = AtomicU64::new(u64::MIN);
     static ATOMIC_ORDERING: Ordering = Ordering::Relaxed;
 

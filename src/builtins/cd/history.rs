@@ -22,17 +22,17 @@ use {
     crate::hack::{self, Result},
     self::message::Message,
     fake_log::__err,
-    sj::Json,
 };
 
 #[cfg(test)]
 mod tests;
 
+mod c_api;
 mod message;
 
 pub static GLOBAL: LazyLock<Arc<RwLock<History>>> = LazyLock::new(|| Arc::new(RwLock::new(History::new(99))));
 
-const STATUS_SERVER_ADDRESS: &str = "history-status";
+const STATUS_SERVER_ADDRESS: &str = "cd-history-status";
 
 static SENDER: LazyLock<Sender<Message>> = LazyLock::new(|| {
     let (sender, receiver) = mpsc::channel();
@@ -64,9 +64,7 @@ static SENDER: LazyLock<Sender<Message>> = LazyLock::new(|| {
                         client_id += 1;
                     },
                     Message::RemoveClient(id) => drop(clients.remove(&id)),
-                    Message::Cd(path) => if let Ok(data) = Json::from(path).format_as_bytes() {
-                        send_data(data);
-                    },
+                    Message::Cd(path) => send_data(path.into_bytes()),
                 };
             }
         }),
