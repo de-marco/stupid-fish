@@ -75,12 +75,14 @@ fn form_address_with<S>(process_id: u32, id: S) -> String where S: AsRef<str> {
 }
 
 pub fn report_new_process_to_host_process<S>(cmd: S) where S: AsRef<str> {
+    //  We're forked here, do NOT use static variables
     if let Err(err) = (|| {
         if let Some(cmd) = cmd.as_ref().split_whitespace().next().map(|s| s.to_string()) {
             if cmd.is_empty() == false {
-                let host_pid = unsafe { libc::getppid() }.try_into().map_err(|_| err!())?;
-                let request = Nairud::from_iter([Nairud::from(host_pid), Nairud::from(cmd)]);
+                let request = Nairud::from_iter([Nairud::from(process::id()), Nairud::from(cmd)]);
                 let request = Nairud::from(Request::new(proc_man::request::Request::ReportNewProcess, request)).encode_as_vec()?;
+
+                let host_pid = unsafe { libc::getppid() }.try_into().map_err(|_| err!())?;
                 let stream = UnixSeqpacketConn::connect_unix_addr(
                     &UnixSocketAddr::from_abstract(&form_address_with(host_pid, proc_man::UDS_STATUS_SERVER))?
                 )?;

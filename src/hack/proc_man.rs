@@ -79,7 +79,7 @@ async fn start_uds_status_server(sender: UnboundedSender<Message>) -> Result<()>
         if let Ok((mut stream, _)) = listener.accept().await {
             let sender = sender.clone();
             task::spawn(async move {
-                let mut buf = [u8::MIN; 256];
+                let mut buf = [u8::MIN; 2048];
                 let read = stream.recv(&mut buf).await?;
                 if let Ok(Some(Ok(request))) = Nairud::decode(&mut &buf[..read], MAP_KIND).map(|n| n.map(|n| Request::try_from(n))) {
                     if let Ok(r) = self::request::Request::try_from(request.code()) {
