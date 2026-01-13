@@ -3,6 +3,7 @@ extern crate alloc;
 use {
     alloc::sync::Arc,
     std::{
+        collections::HashMap,
         os::unix::net::{SocketAddr, UnixDatagram},
         sync::LazyLock,
     },
@@ -51,41 +52,41 @@ pub (in crate::hack) fn sender() -> &'static UnboundedSender<Message> {
 }
 
 async fn run_channel_server(sender: UnboundedSender<Message>, mut receiver: UnboundedReceiver<Message>) {
-    let mut clients = Vec::<SocketAddr>::with_capacity(3);
+    let mut client_id = u64::MIN;
+    let mut clients = HashMap::<u64, SocketAddr>::with_capacity(3);
     let mut current_pid = None;
     while let Some(message) = receiver.recv().await {
-        let send_data = async |data: Vec<_>| {
-            let data = Arc::new(data);
-            for (index, address) in clients.iter().enumerate() {
-                let data = Arc::clone(&data);
-                let address = address.clone();
-                let sender = sender.clone();
+        macro_rules! send_data { ($data: ident) => {
+            let data = Arc::new($data);
+            for (client_id, address) in &clients {
+                let (data, client_id, address, sender) = (Arc::clone(&data), *client_id, address.clone(), sender.clone());
                 task::spawn_blocking(move || {
                     if let Err(err) = (|| {
                         let socket = UnixDatagram::unbound()?;
                         socket.send_to_addr(&data, &address)
                     })() {
                         __err!("{err}\n");
-                        if sender.send(Message::RemoveClient(index)).is_err() {}
+                        if sender.send(Message::RemoveClient(client_id)).is_err() {}
                     }
                 });
             }
-        };
+        }}
         match message {
-            Message::NewClient(client_address) => clients.push(client_address),
-            Message::RemoveClient(i) => if i < clients.len() {
-                clients.remove(i);
+            Message::NewClient(client_address) => {
+                clients.insert(client_id, client_address);
+                client_id += 1;
             },
+            Message::RemoveClient(id) => drop(clients.remove(&id)),
             Message::NewProcess { id, exe } => {
                 current_pid = Some(id);
                 if let Ok(data) = Nairud::from_iter([Nairud::from(id), Nairud::from(exe)]).encode_as_vec() {
-                    send_data(data).await;
+                    send_data!(data);
                 }
             },
             Message::ProcessFinished(pid) => if current_pid == Some(pid) {
                 current_pid = None;
                 if let Ok(data) = Nairud::None.encode_as_vec() {
-                    send_data(data).await;
+                    send_data!(data);
                 }
             },
         };
