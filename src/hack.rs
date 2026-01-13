@@ -24,6 +24,8 @@ use {
     },
 };
 
+pub mod c_api;
+
 mod proc_man;
 
 pub type Result<T> = std::io::Result<T>;
