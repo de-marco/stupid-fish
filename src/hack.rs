@@ -68,6 +68,10 @@ fn form_address<S>(id: S) -> String where S: AsRef<str> {
     form_address_with(process::id(), id)
 }
 
+fn make_socket_address_with<S>(process_id: u32, id: S) -> Result<SocketAddr> where S: AsRef<str> {
+    SocketAddr::from_abstract_name(form_address_with(process_id, id))
+}
+
 fn form_address_with<S>(process_id: u32, id: S) -> String where S: AsRef<str> {
     const ADDRESS_PREFIX: &str = "57b8ce61-d64293cc-da5ed9e2-d8458614";
 
@@ -88,7 +92,7 @@ pub fn report_new_process_to_host_process<S>(cmd: S) where S: AsRef<str> {
                 let stream = UnixDatagram::unbound()?;
                 stream.connect_addr(&{
                     let host_pid = unsafe { libc::getppid() }.try_into().map_err(|_| err!())?;
-                    SocketAddr::from_abstract_name(form_address_with(host_pid, proc_man::UDS_STATUS_SERVER))?
+                    make_socket_address_with(host_pid, proc_man::UDS_STATUS_SERVER)?
                 })?;
                 stream.send(&request)?;
             }

@@ -19,9 +19,13 @@ use {
 pub mod message;
 pub mod request;
 
+mod c_api;
+
 pub type Pid = u32;
 
 pub (super) const UDS_STATUS_SERVER: &str = "uds-status";
+
+const UNIX_DATAGRAM_BUF: usize = 2048;
 
 static SENDER: LazyLock<UnboundedSender<Message>> = LazyLock::new(|| {
     let (sender, receiver) = mpsc::unbounded_channel();
@@ -82,7 +86,7 @@ async fn start_uds_status_server(sender: UnboundedSender<Message>) -> Result<()>
     listener.set_nonblocking(true)?;
     let listener = UnixDatagram::try_from(listener)?;
     loop {
-        let mut buf = [u8::MIN; 2048];
+        let mut buf = [u8::MIN; UNIX_DATAGRAM_BUF];
         if let Ok((size, client_address)) = listener.recv_from(&mut buf).await {
             let sender = sender.clone();
             let data = buf[..size].to_vec();
