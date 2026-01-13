@@ -52,7 +52,7 @@ extern "C" fn stupid_fish_start_process_watcher(pid: u32, f: Callback, user_data
                         stream.send(&Nairud::from(Request::new(super::request::Request::WatchForProcesses, ())).encode_as_vec()?).await?;
                         loop {
                             let mut buf = [u8::MIN; UNIX_DATAGRAM_BUF];
-                            let size = stream.recv(&mut buf).await?;
+                            let (size, _) = stream.recv_from(&mut buf).await?;
                             let json = match Nairud::decode(&mut &buf[..size], MAP_KIND)? {
                                 Some(Nairud::Array(array)) => Json::from_iter([
                                     Json::from(u32::try_from(&array[usize::MIN])?),
