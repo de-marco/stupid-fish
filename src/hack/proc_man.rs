@@ -23,51 +23,25 @@ pub type Pid = u32;
 
 pub (super) const UDS_STATUS_SERVER: &str = "uds-status";
 
-static FINISHED_SENDER: LazyLock<UnboundedSender<Message>> = LazyLock::new(|| {
+static SENDER: LazyLock<UnboundedSender<Message>> = LazyLock::new(|| {
     let (sender, receiver) = mpsc::unbounded_channel();
     if let Ok(runtime) = super::runtime() {
-        runtime.spawn(run_finished_server(receiver));
+        runtime.spawn(run_channel_server(receiver));
         runtime.spawn(start_uds_status_server(sender.clone()));
     }
     sender
 });
 
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Ord, PartialOrd)]
-pub (super) enum Task {
-    //  Use Unix Domain socket to receive startup signals from forked processes
-    Startup,
-    //  Use mpsc to receive finished signals of forked processes within current process.
-    Finished,
-}
-
-impl Task {
-
-    const fn id(&self) -> &str {
-        match self {
-            Self::Startup => "startup",
-            Self::Finished => "finished",
-        }
-    }
-
-    pub async fn start_server(&self) -> Result<()> {
-        match self {
-            Self::Startup => todo!(),
-            Self::Finished => start_finished_server().await,
-        }
-    }
-
-}
-
-async fn start_finished_server() -> Result<()> {
-    let _ = &*FINISHED_SENDER;
+pub (super) async fn start_server() -> Result<()> {
+    let _ = &*SENDER;
     Ok(())
 }
 
-pub (in crate::hack) fn finished_sender() -> &'static UnboundedSender<Message> {
-    &*FINISHED_SENDER
+pub (in crate::hack) fn sender() -> &'static UnboundedSender<Message> {
+    &*SENDER
 }
 
-async fn run_finished_server(mut receiver: UnboundedReceiver<Message>) {
+async fn run_channel_server(mut receiver: UnboundedReceiver<Message>) {
     let mut clients = Vec::<UnixSeqpacketConn>::with_capacity(3);
     let mut current_pid = None;
     while let Some(message) = receiver.recv().await {

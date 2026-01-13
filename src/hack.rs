@@ -40,7 +40,7 @@ pub fn setup() {
         if thread::current().id() != *MAIN_THREAD_ID {
             let runtime = Runtime::new().map(|r| Arc::new(r));
             if let Ok(runtime) = &runtime {
-                runtime.spawn(proc_man::Task::Finished.start_server());
+                runtime.spawn(proc_man::start_server());
             }
             runtime
         } else {
@@ -94,7 +94,7 @@ pub fn report_new_process_to_host_process<S>(cmd: S) where S: AsRef<str> {
 }
 
 pub fn report_process_finished(id: proc_man::Pid) {
-    if let Err(err) = proc_man::finished_sender().send(proc_man::message::Message::ProcessFinished(id)) {
+    if let Err(err) = proc_man::sender().send(proc_man::message::Message::ProcessFinished(id)) {
         __err!("{err}\n");
     }
 }
