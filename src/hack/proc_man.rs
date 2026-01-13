@@ -1,9 +1,15 @@
 use {
     std::sync::LazyLock,
-    super::Result,
+    super::{MAP_KIND, Result},
     self::message::Message,
-    lacol_rpc::debts::nairud::Nairud,
-    tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
+    lacol_rpc::{
+        debts::nairud::Nairud,
+        request::Request,
+    },
+    tokio::{
+        sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
+        task,
+    },
     uds::{
         UnixSocketAddr,
         tokio::UnixSeqpacketListener,
@@ -86,10 +92,22 @@ async fn run_finished_server(mut receiver: UnboundedReceiver<Message>) {
 async fn start_uds_status_server(sender: UnboundedSender<Message>) -> Result<()> {
     let mut listener = UnixSeqpacketListener::bind_addr(&UnixSocketAddr::from_abstract(&super::form_address("uds-status"))?)?;
     loop {
-        if let Ok((stream, _)) = listener.accept().await {
-            if sender.send(Message::NewClient(stream)).is_err() {
-                return Ok(());
-            }
+        if let Ok((mut stream, _)) = listener.accept().await {
+            let sender = sender.clone();
+            task::spawn(async move {
+                let mut buf = [u8::MIN; 256];
+                let read = stream.recv(&mut buf).await?;
+                if let Ok(Some(Ok(request))) = Nairud::decode(&mut &buf[..read], MAP_KIND).map(|n| n.map(|n| Request::try_from(n))) {
+                    if let Ok(r) = self::request::Request::try_from(request.code()) {
+                        match r {
+                            self::request::Request::ReportNewProcess => todo!(),
+                            //  Ignore it
+                            self::request::Request::WatchForProcesses => if sender.send(Message::NewClient(stream)).is_err() {},
+                        };
+                    }
+                }
+                Result::Ok(())
+            });
         }
     }
 }

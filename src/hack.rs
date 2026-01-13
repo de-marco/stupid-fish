@@ -13,6 +13,7 @@ use {
         thread::{self, ThreadId},
     },
     fake_log::__info,
+    lacol_rpc::debts::nairud::MapKind,
     tokio::{
         net::UnixListener,
         runtime::Runtime,
@@ -22,6 +23,8 @@ use {
 mod proc_man;
 
 pub type Result<T> = std::io::Result<T>;
+
+const MAP_KIND: MapKind = MapKind::HashMap;
 
 pub static MAIN_THREAD_ID: LazyLock<ThreadId> = LazyLock::new(|| thread::current().id());
 
