@@ -9,19 +9,70 @@ use {
     std::{
         collections::HashMap,
         env,
-        os::unix::net::UnixDatagram,
-        sync::{LazyLock, RwLock, TryLockError},
+        os::unix::net::{SocketAddr, UnixDatagram},
+        sync::{
+            LazyLock,
+            RwLock,
+            TryLockError,
+            mpsc::{self, Sender},
+        },
         thread::{self, JoinHandle},
         time::SystemTime,
     },
-    crate::hack::Result,
+    crate::hack::{self, Result},
+    self::message::Message,
     fake_log::__err,
+    sj::Json,
 };
 
 #[cfg(test)]
 mod tests;
 
+mod message;
+
 pub static GLOBAL: LazyLock<Arc<RwLock<History>>> = LazyLock::new(|| Arc::new(RwLock::new(History::new(99))));
+
+const STATUS_SERVER_ADDRESS: &str = "history-status";
+
+static SENDER: LazyLock<Sender<Message>> = LazyLock::new(|| {
+    let (sender, receiver) = mpsc::channel();
+    match sender.clone() {
+        sender => thread::spawn(move || {
+            let mut clients = HashMap::<u64, SocketAddr>::with_capacity(3);
+            let mut client_id = u64::MIN;
+            while let Ok(message) = receiver.recv() {
+                let send_data = |data: Vec<_>| {
+                    if let Ok(runtime) = hack::runtime() {
+                        let data = Arc::new(data);
+                        for (client_id, address) in &clients {
+                            let (data, client_id, address, sender) = (Arc::clone(&data), *client_id, address.clone(), sender.clone());
+                            runtime.spawn_blocking(move || {
+                                if let Err(err) = (|| {
+                                    let socket = UnixDatagram::unbound()?;
+                                    socket.send_to_addr(&data, &address)
+                                })() {
+                                    __err!("{err}\n");
+                                    if sender.send(Message::RemoveClient(client_id)).is_err() {}
+                                }
+                            });
+                        }
+                    }
+                };
+                match message {
+                    Message::NewClient(address) => {
+                        clients.insert(client_id, address);
+                        client_id += 1;
+                    },
+                    Message::RemoveClient(id) => drop(clients.remove(&id)),
+                    Message::Cd(path) => if let Ok(data) = Json::from(path).format_as_bytes() {
+                        send_data(data);
+                    },
+                };
+            }
+        }),
+    };
+    sender
+});
 
 #[derive(Debug, Clone)]
 pub struct History {
@@ -87,7 +138,11 @@ pub (super) fn add<S>(path: S) where S: Into<String> {
     loop {
         match GLOBAL.try_write() {
             Ok(mut history) => {
-                history.add(path);
+                let path = path.into();
+                history.add(&path);
+                if SENDER.send(Message::Cd(path)).is_err() {
+                    // Ignore it
+                }
                 return;
             },
             Err(TryLockError::Poisoned(_)) => GLOBAL.clear_poison(),
@@ -98,10 +153,13 @@ pub (super) fn add<S>(path: S) where S: Into<String> {
 
 fn start_status_server() {
     static THREAD: LazyLock<JoinHandle<Result<()>>> = LazyLock::new(|| thread::spawn(|| {
-        let socket = UnixDatagram::bind_addr(&crate::hack::make_socket_address("history-status")?)?;
+        let socket = UnixDatagram::bind_addr(&hack::make_socket_address(STATUS_SERVER_ADDRESS)?)?;
         loop {
             let mut buf = [u8::MIN; 10];
-            if let Ok((_, _client_address)) = socket.recv_from(&mut buf) {
+            if let Ok((_, address)) = socket.recv_from(&mut buf) {
+                if SENDER.send(Message::NewClient(address)).is_err() {
+                    // Ignore it
+                }
             }
         }
     }));
