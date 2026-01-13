@@ -2,7 +2,7 @@ use {
     std::sync::LazyLock,
     super::Result,
     self::message::Message,
-    nairud::Nairud,
+    lacol_rpc::debts::nairud::Nairud,
     tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
     uds::{
         UnixSocketAddr,
@@ -11,6 +11,7 @@ use {
 };
 
 mod message;
+mod request;
 
 type Pid = ();
 

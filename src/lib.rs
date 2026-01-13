@@ -1,3 +1,5 @@
+#![feature(variant_count)]
+
 #![cfg_attr(feature = "benchmark", feature(test))]
 #![allow(non_camel_case_types)]
 

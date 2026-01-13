@@ -182,10 +182,10 @@ dependencies = [
  "fish-tempfile",
  "fish-wchar",
  "fish-widecharwidth",
+ "lacol-rpc",
  "libc",
  "lru",
  "macro_rules_attribute",
- "nairud",
  "nix",
  "num-traits",
  "once_cell",
@@ -383,6 +383,15 @@ checksum = "9afb3de4395d6b3e67a780b6de64b51c978ecf11cb9a462c66be7d4ca9039d33"
 dependencies = [
  "getrandom 0.3.4",
  "libc",
+]
+
+[[package]]
+name = "lacol-rpc"
+version = "0.1.7"
+source = "sparse+http://[::1]:37707/"
+checksum = "0b4b37a6176e24160c25b31556da9b144ebfdd60cceae3cb0333b98a0124fbb9"
+dependencies = [
+ "nairud",
 ]
 
 [[package]]

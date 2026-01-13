@@ -3,7 +3,7 @@ use {
     uds::tokio::UnixSeqpacketConn,
 };
 
-pub (super) enum Message {
+pub (in crate::hack) enum Message {
     NewClient(UnixSeqpacketConn),
     ProcessFinished(Pid),
 }
