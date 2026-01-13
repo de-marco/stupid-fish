@@ -1,10 +1,10 @@
 use {
+    std::os::unix::net::SocketAddr,
     super::Pid,
-    uds::tokio::UnixSeqpacketConn,
 };
 
 pub (in crate::hack) enum Message {
-    NewClient(UnixSeqpacketConn),
+    NewClient(SocketAddr),
     NewProcess { id: Pid, exe: String },
     ProcessFinished(Pid),
 }

@@ -5,7 +5,7 @@ use {
     std::{
         os::{
             linux::net::SocketAddrExt,
-            unix::net::SocketAddr,
+            unix::net::{SocketAddr, UnixDatagram},
         },
         path::MAIN_SEPARATOR,
         process,
@@ -21,7 +21,6 @@ use {
         net::UnixListener,
         runtime::Runtime,
     },
-    uds::{UnixSeqpacketConn, UnixSocketAddr},
 };
 
 mod proc_man;
@@ -56,9 +55,13 @@ pub fn runtime() -> Result<&'static Arc<Runtime>> {
 }
 
 pub fn bind<S>(id: S) -> Result<UnixListener> where S: AsRef<str> {
-    let listener = std::os::unix::net::UnixListener::bind_addr(&SocketAddr::from_abstract_name(&form_address(id))?)?;
+    let listener = std::os::unix::net::UnixListener::bind_addr(&make_socket_address(id)?)?;
     listener.set_nonblocking(true)?;
     listener.try_into()
+}
+
+fn make_socket_address<S>(id: S) -> Result<SocketAddr> where S: AsRef<str> {
+    SocketAddr::from_abstract_name(form_address(id))
 }
 
 fn form_address<S>(id: S) -> String where S: AsRef<str> {
@@ -82,10 +85,11 @@ pub fn report_new_process_to_host_process<S>(cmd: S) where S: AsRef<str> {
                 let request = Nairud::from_iter([Nairud::from(process::id()), Nairud::from(cmd)]);
                 let request = Nairud::from(Request::new(proc_man::request::Request::ReportNewProcess, request)).encode_as_vec()?;
 
-                let host_pid = unsafe { libc::getppid() }.try_into().map_err(|_| err!())?;
-                let stream = UnixSeqpacketConn::connect_unix_addr(
-                    &UnixSocketAddr::from_abstract(&form_address_with(host_pid, proc_man::UDS_STATUS_SERVER))?
-                )?;
+                let stream = UnixDatagram::unbound()?;
+                stream.connect_addr(&{
+                    let host_pid = unsafe { libc::getppid() }.try_into().map_err(|_| err!())?;
+                    SocketAddr::from_abstract_name(form_address_with(host_pid, proc_man::UDS_STATUS_SERVER))?
+                })?;
                 stream.send(&request)?;
             }
         }
