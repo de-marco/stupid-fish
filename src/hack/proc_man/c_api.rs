@@ -7,12 +7,16 @@ use {
     },
     alloc::sync::Arc,
     std::{
+        os::unix::net::UnixDatagram,
         sync::OnceLock,
         thread,
         time::Instant,
     },
     crate::hack::{MAP_KIND, Result},
-    super::UNIX_DATAGRAM_BUF,
+    super::{
+        super::{make_random_socket_address, make_socket_address_with},
+        UNIX_DATAGRAM_BUF,
+    },
     fake_log::__err,
     lacol_rpc::{
         debts::nairud::Nairud,
@@ -20,11 +24,11 @@ use {
     },
     libc::size_t,
     sj::Json,
-    tokio::{
-        net::UnixDatagram,
-        runtime::Runtime,
-    },
+    tokio::runtime::Runtime,
 };
+
+#[cfg(test)]
+mod tests;
 
 type Callback = unsafe extern "C" fn(*const u8, size_t, *const c_void);
 
@@ -43,16 +47,16 @@ extern "C" fn stupid_fish_start_process_watcher(pid: u32, f: Callback, user_data
             },
             Some(Ok(runtime)) => {
                 let user_data = user_data as usize;
-                runtime.spawn(async move {
-                    if let Result::<()>::Err(err) = async {
-                        let stream = std::os::unix::net::UnixDatagram::unbound()?;
-                        stream.connect_addr(&super::super::make_socket_address_with(pid, super::UDS_STATUS_SERVER)?)?;
-                        stream.set_nonblocking(true)?;
-                        let stream = UnixDatagram::try_from(stream)?;
-                        stream.send(&Nairud::from(Request::new(super::request::Request::WatchForProcesses, ())).encode_as_vec()?).await?;
+                runtime.spawn_blocking(move || {
+                    if let Result::<()>::Err(err) = (|| {
+                        let socket = UnixDatagram::bind_addr(&make_random_socket_address()?)?;
+                        socket.send_to_addr(
+                            &Nairud::from(Request::new(super::request::Request::WatchForProcesses, ())).encode_as_vec()?,
+                            &make_socket_address_with(pid, super::UDS_STATUS_SERVER)?,
+                        )?;
                         loop {
                             let mut buf = [u8::MIN; UNIX_DATAGRAM_BUF];
-                            let (size, _) = stream.recv_from(&mut buf).await?;
+                            let (size, _) = socket.recv_from(&mut buf)?;
                             let json = match Nairud::decode(&mut &buf[..size], MAP_KIND)? {
                                 Some(Nairud::Array(array)) => Json::from_iter([
                                     Json::from(u32::try_from(&array[usize::MIN])?),
@@ -66,7 +70,7 @@ extern "C" fn stupid_fish_start_process_watcher(pid: u32, f: Callback, user_data
                                 f(json.as_ptr(), json.len(), user_data as *const c_void);
                             }
                         }
-                    }.await {
+                    })() {
                         __err!("{err}\n");
                     }
                 });

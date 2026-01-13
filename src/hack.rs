@@ -1,6 +1,7 @@
 extern crate alloc;
 
 use {
+    core::sync::atomic::{AtomicU64, Ordering},
     alloc::sync::Arc,
     std::{
         os::{
@@ -81,6 +82,13 @@ fn form_address_with<S>(process_id: u32, id: S) -> String where S: AsRef<str> {
     result
 }
 
+fn make_random_socket_address() -> Result<SocketAddr> {
+    static ID: AtomicU64 = AtomicU64::new(u64::MIN);
+    static ATOMIC_ORDERING: Ordering = Ordering::Relaxed;
+
+    SocketAddr::from_abstract_name(form_address(format!("auto/{}", ID.fetch_add(1, ATOMIC_ORDERING))))
+}
+
 pub fn report_new_process_to_host_process<S>(cmd: S) where S: AsRef<str> {
     //  We're forked here, do NOT use static variables
     if let Err(err) = (|| {
@@ -89,12 +97,11 @@ pub fn report_new_process_to_host_process<S>(cmd: S) where S: AsRef<str> {
                 let request = Nairud::from_iter([Nairud::from(process::id()), Nairud::from(cmd)]);
                 let request = Nairud::from(Request::new(proc_man::request::Request::ReportNewProcess, request)).encode_as_vec()?;
 
-                let stream = UnixDatagram::unbound()?;
-                stream.connect_addr(&{
+                let socket = UnixDatagram::unbound()?;
+                socket.send_to_addr(&request, &{
                     let host_pid = unsafe { libc::getppid() }.try_into().map_err(|_| err!())?;
                     make_socket_address_with(host_pid, proc_man::UDS_STATUS_SERVER)?
                 })?;
-                stream.send(&request)?;
             }
         }
         Result::Ok(())
