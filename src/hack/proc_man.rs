@@ -101,7 +101,7 @@ async fn start_uds_status_server(sender: UnboundedSender<Message>) -> Result<()>
                     if let Ok(r) = self::request::Request::try_from(request.code()) {
                         match r {
                             self::request::Request::ReportNewProcess => todo!(),
-                            //  Ignore it
+                            //  Ignore error
                             self::request::Request::WatchForProcesses => if sender.send(Message::NewClient(stream)).is_err() {},
                         };
                     }
