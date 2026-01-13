@@ -397,6 +397,10 @@ fn safe_launch_process(
     argv: &OwningNullTerminatedArray,
     envv: &OwningNullTerminatedArray,
 ) -> ! {
+    if let Ok(actual_cmd) = actual_cmd.to_str() {
+        crate::hack::report_new_process_to_host_process(actual_cmd);
+    }
+
     // This function never returns, so we take certain liberties with constness.
 
     unsafe { libc::execve(actual_cmd.as_ptr(), argv.get(), envv.get()) };

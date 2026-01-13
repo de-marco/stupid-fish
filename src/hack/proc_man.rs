@@ -16,10 +16,13 @@ use {
     },
 };
 
+pub mod request;
+
 mod message;
-mod request;
 
 type Pid = ();
+
+pub (super) const UDS_STATUS_SERVER: &str = "uds-status";
 
 static FINISHED_SENDER: LazyLock<UnboundedSender<Message>> = LazyLock::new(|| {
     let (sender, receiver) = mpsc::unbounded_channel();
@@ -91,7 +94,7 @@ async fn run_finished_server(mut receiver: UnboundedReceiver<Message>) {
 }
 
 async fn start_uds_status_server(sender: UnboundedSender<Message>) -> Result<()> {
-    let mut listener = UnixSeqpacketListener::bind_addr(&UnixSocketAddr::from_abstract(&super::form_address("uds-status"))?)?;
+    let mut listener = UnixSeqpacketListener::bind_addr(&UnixSocketAddr::from_abstract(&super::form_address(UDS_STATUS_SERVER))?)?;
     loop {
         if let Ok((mut stream, _)) = listener.accept().await {
             let sender = sender.clone();

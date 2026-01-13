@@ -9,7 +9,7 @@ use {
 mod tests;
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Ord, PartialOrd)]
-pub enum Request {
+pub (in crate::hack) enum Request {
     ReportNewProcess,
     WatchForProcesses,
 }
