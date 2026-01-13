@@ -1,5 +1,5 @@
 use {
-    core::ffi::c_int,
+    core::ffi::{c_int, c_void},
     std::{
         os::unix::net::UnixDatagram,
         sync::OnceLock,
@@ -16,12 +16,13 @@ use {
     sj::Json,
 };
 
-type Callback = unsafe extern "C" fn(*const u8, size_t);
+type Callback = unsafe extern "C" fn(*const u8, size_t, *const c_void);
 
 static THREAD: OnceLock<()> = OnceLock::new();
 
 #[unsafe(no_mangle)]
-extern "C" fn stupid_fish_start_process_watcher(pid: u32, f: Callback) -> c_int {
+extern "C" fn stupid_fish_start_process_watcher(pid: u32, f: Callback, user_data: *const c_void) -> c_int {
+    let user_data = user_data as usize;
     THREAD.get_or_init(move || drop(thread::spawn(move || {
         if let Err(err) = (|| -> Result<()> {
             let request = Nairud::from(Request::new(super::request::Request::WatchForProcesses, ())).encode_as_vec()?;
@@ -43,7 +44,7 @@ extern "C" fn stupid_fish_start_process_watcher(pid: u32, f: Callback) -> c_int 
                 };
                 let json = json.format_as_bytes()?;
                 unsafe {
-                    f(json.as_ptr(), json.len());
+                    f(json.as_ptr(), json.len(), user_data as *const c_void);
                 }
             }
         })() {
