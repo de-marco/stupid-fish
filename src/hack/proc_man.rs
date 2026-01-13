@@ -33,7 +33,7 @@ const UNIX_DATAGRAM_BUF: usize = 2048;
 static SENDER: LazyLock<UnboundedSender<Message>> = LazyLock::new(|| {
     let (sender, receiver) = mpsc::unbounded_channel();
     if let Ok(runtime) = super::runtime() {
-        runtime.spawn(run_channel_server(receiver));
+        runtime.spawn(run_channel_server(sender.clone(), receiver));
         match sender.clone() {
             sender => runtime.spawn_blocking(move || start_uds_status_server(sender)),
         };
@@ -50,29 +50,32 @@ pub (in crate::hack) fn sender() -> &'static UnboundedSender<Message> {
     &*SENDER
 }
 
-async fn run_channel_server(mut receiver: UnboundedReceiver<Message>) {
+async fn run_channel_server(sender: UnboundedSender<Message>, mut receiver: UnboundedReceiver<Message>) {
     let mut clients = Vec::<SocketAddr>::with_capacity(3);
     let mut current_pid = None;
     while let Some(message) = receiver.recv().await {
         let send_data = async |data: Vec<_>| {
             let data = Arc::new(data);
-            for address in &clients {
+            for (index, address) in clients.iter().enumerate() {
                 let data = Arc::clone(&data);
                 let address = address.clone();
+                let sender = sender.clone();
                 task::spawn_blocking(move || {
                     if let Err(err) = (|| {
                         let socket = UnixDatagram::unbound()?;
                         socket.send_to_addr(&data, &address)
                     })() {
                         __err!("{err}\n");
-                        // TODO
-                        // clients.swap_remove(i);
+                        if sender.send(Message::RemoveClient(index)).is_err() {}
                     }
                 });
             }
         };
         match message {
             Message::NewClient(client_address) => clients.push(client_address),
+            Message::RemoveClient(i) => if i < clients.len() {
+                clients.remove(i);
+            },
             Message::NewProcess { id, exe } => {
                 current_pid = Some(id);
                 if let Ok(data) = Nairud::from_iter([Nairud::from(id), Nairud::from(exe)]).encode_as_vec() {

@@ -5,6 +5,7 @@ use {
 
 pub (in crate::hack) enum Message {
     NewClient(SocketAddr),
+    RemoveClient(usize),
     NewProcess { id: Pid, exe: String },
     ProcessFinished(Pid),
 }
