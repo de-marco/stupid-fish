@@ -62,14 +62,12 @@ async fn run_channel_server(mut receiver: UnboundedReceiver<Message>) {
         match message {
             Message::NewClient(client_address) => clients.push(client_address),
             Message::NewProcess { id, exe } => {
-fake_log::__info!("NewProcess: {id} -> {exe}\n");
                 current_pid = Some(id);
                 if let Ok(data) = Nairud::from_iter([Nairud::from(id), Nairud::from(exe)]).encode_as_vec() {
                     send_data(data).await;
                 }
             },
             Message::ProcessFinished(pid) => if current_pid == Some(pid) {
-fake_log::__info!("ProcessFinished: {pid}\n");
                 current_pid = None;
                 if let Ok(data) = Nairud::None.encode_as_vec() {
                     send_data(data).await;
