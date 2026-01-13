@@ -56,8 +56,8 @@ async fn run_channel_server(sender: UnboundedSender<Message>, mut receiver: Unbo
     let mut clients = HashMap::<u64, SocketAddr>::with_capacity(3);
     let mut current_pid = None;
     while let Some(message) = receiver.recv().await {
-        macro_rules! send_data { ($data: ident) => {
-            let data = Arc::new($data);
+        let send_data = |data: Vec<_>| {
+            let data = Arc::new(data);
             for (client_id, address) in &clients {
                 let (data, client_id, address, sender) = (Arc::clone(&data), *client_id, address.clone(), sender.clone());
                 task::spawn_blocking(move || {
@@ -70,7 +70,7 @@ async fn run_channel_server(sender: UnboundedSender<Message>, mut receiver: Unbo
                     }
                 });
             }
-        }}
+        };
         match message {
             Message::NewClient(client_address) => {
                 clients.insert(client_id, client_address);
@@ -80,13 +80,13 @@ async fn run_channel_server(sender: UnboundedSender<Message>, mut receiver: Unbo
             Message::NewProcess { id, exe } => {
                 current_pid = Some(id);
                 if let Ok(data) = Nairud::from_iter([Nairud::from(id), Nairud::from(exe)]).encode_as_vec() {
-                    send_data!(data);
+                    send_data(data);
                 }
             },
             Message::ProcessFinished(pid) => if current_pid == Some(pid) {
                 current_pid = None;
                 if let Ok(data) = Nairud::None.encode_as_vec() {
-                    send_data!(data);
+                    send_data(data);
                 }
             },
         };
