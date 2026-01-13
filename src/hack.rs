@@ -58,9 +58,13 @@ pub fn bind<S>(id: S) -> Result<UnixListener> where S: AsRef<str> {
 }
 
 fn form_address<S>(id: S) -> String where S: AsRef<str> {
+    form_address_with(process::id(), id)
+}
+
+fn form_address_with<S>(process_id: u32, id: S) -> String where S: AsRef<str> {
     const ADDRESS_PREFIX: &str = "57b8ce61-d64293cc-da5ed9e2-d8458614";
 
-    let result = format!("{process_id}{MAIN_SEPARATOR}{ADDRESS_PREFIX}{MAIN_SEPARATOR}{id}", process_id=process::id(), id=id.as_ref());
+    let result = format!("{process_id}{MAIN_SEPARATOR}{ADDRESS_PREFIX}{MAIN_SEPARATOR}{id}", id=id.as_ref());
     __info!("-> {result}\n");
 
     result
