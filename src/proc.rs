@@ -1065,6 +1065,10 @@ pub fn proc_init() {
 
 /// Set the status of `proc` to `status`.
 fn handle_child_status(job: &Job, proc: &Process, status: ProcStatus) {
+    if let Some(Ok(pid)) = proc.pid.get().map(|pid| pid.get().try_into()) {
+        crate::hack::report_process_finished(pid);
+    }
+
     proc.status.set(status);
     if status.stopped() {
         proc.stopped.store(true);

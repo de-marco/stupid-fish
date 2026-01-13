@@ -16,11 +16,10 @@ use {
     },
 };
 
+pub mod message;
 pub mod request;
 
-mod message;
-
-type Pid = ();
+pub type Pid = u32;
 
 pub (super) const UDS_STATUS_SERVER: &str = "uds-status";
 
@@ -64,12 +63,13 @@ async fn start_finished_server() -> Result<()> {
     Ok(())
 }
 
-pub (super) fn finished_sender() -> &'static UnboundedSender<Message> {
+pub (in crate::hack) fn finished_sender() -> &'static UnboundedSender<Message> {
     &*FINISHED_SENDER
 }
 
 async fn run_finished_server(mut receiver: UnboundedReceiver<Message>) {
     let mut clients = Vec::<UnixSeqpacketConn>::with_capacity(3);
+    let mut current_pid = None;
     while let Some(message) = receiver.recv().await {
         let mut send_data = async |data: Vec<_>| {
             let mut i = usize::MIN;
@@ -83,11 +83,17 @@ async fn run_finished_server(mut receiver: UnboundedReceiver<Message>) {
         };
         match message {
             Message::NewClient(stream) => clients.push(stream),
-            Message::NewProcess { id, exe } => if let Ok(data) = Nairud::from_iter([Nairud::from(id), Nairud::from(exe)]).encode_as_vec() {
-                send_data(data).await;
+            Message::NewProcess { id, exe } => {
+                current_pid = Some(id);
+                if let Ok(data) = Nairud::from_iter([Nairud::from(id), Nairud::from(exe)]).encode_as_vec() {
+                    send_data(data).await;
+                }
             },
-            Message::ProcessFinished(_) => if let Ok(data) = Nairud::None.encode_as_vec() {
-                send_data(data).await;
+            Message::ProcessFinished(pid) => if current_pid == Some(pid) {
+                current_pid = None;
+                if let Ok(data) = Nairud::None.encode_as_vec() {
+                    send_data(data).await;
+                }
             },
         };
     }

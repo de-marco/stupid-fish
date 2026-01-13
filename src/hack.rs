@@ -92,3 +92,9 @@ pub fn report_new_process_to_host_process<S>(cmd: S) where S: AsRef<str> {
         __err!("{err}\n");
     }
 }
+
+pub fn report_process_finished(id: proc_man::Pid) {
+    if let Err(err) = proc_man::finished_sender().send(proc_man::message::Message::ProcessFinished(id)) {
+        __err!("{err}\n");
+    }
+}
