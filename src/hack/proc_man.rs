@@ -81,7 +81,6 @@ async fn start_uds_status_server(sender: UnboundedSender<Message>) -> Result<()>
     let listener = std::os::unix::net::UnixDatagram::bind_addr(&super::make_socket_address(UDS_STATUS_SERVER)?)?;
     listener.set_nonblocking(true)?;
     let listener = UnixDatagram::try_from(listener)?;
-
     loop {
         let mut buf = [u8::MIN; 2048];
         if let Ok((size, client_address)) = listener.recv_from(&mut buf).await {
