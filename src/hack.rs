@@ -54,7 +54,7 @@ pub fn bind<S>(id: S) -> Result<UnixListener> where S: AsRef<str> {
     listener.try_into()
 }
 
-fn make_socket_address<S>(id: S) -> Result<SocketAddr> where S: AsRef<str> {
+pub fn make_socket_address<S>(id: S) -> Result<SocketAddr> where S: AsRef<str> {
     SocketAddr::from_abstract_name(form_address(id))
 }
 

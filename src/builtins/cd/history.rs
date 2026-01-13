@@ -9,10 +9,12 @@ use {
     std::{
         collections::HashMap,
         env,
+        os::unix::net::UnixDatagram,
         sync::{LazyLock, RwLock, TryLockError},
-        thread,
+        thread::{self, JoinHandle},
         time::SystemTime,
     },
+    crate::hack::Result,
     fake_log::__err,
 };
 
@@ -77,6 +79,8 @@ pub fn setup() {
         },
         Err(err) => __err!("Failed setting up global CD history: {err}\n"),
     };
+
+    start_status_server();
 }
 
 pub (super) fn add<S>(path: S) where S: Into<String> {
@@ -90,4 +94,17 @@ pub (super) fn add<S>(path: S) where S: Into<String> {
             Err(TryLockError::WouldBlock) => thread::sleep(Duration::from_millis(10)),
         };
     }
+}
+
+fn start_status_server() {
+    static THREAD: LazyLock<JoinHandle<Result<()>>> = LazyLock::new(|| thread::spawn(|| {
+        let socket = UnixDatagram::bind_addr(&crate::hack::make_socket_address("history-status")?)?;
+        loop {
+            let mut buf = [u8::MIN; 10];
+            if let Ok((_, _client_address)) = socket.recv_from(&mut buf) {
+            }
+        }
+    }));
+
+    let _ = *THREAD;
 }
