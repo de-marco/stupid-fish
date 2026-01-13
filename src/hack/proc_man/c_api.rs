@@ -18,7 +18,7 @@ use {
 #[cfg(test)]
 mod tests;
 
-type Callback = unsafe extern "C" fn(*const u8, size_t, *const c_void);
+type Callback = unsafe extern "C" fn(*const u8, size_t, *const c_void) -> bool;
 
 #[unsafe(no_mangle)]
 extern "C" fn stupid_fish_start_process_watcher(pid: u32, f: Callback, user_data: *const c_void) -> c_int {
@@ -49,7 +49,9 @@ extern "C" fn stupid_fish_start_process_watcher(pid: u32, f: Callback, user_data
                         };
                         let json = json.format_as_bytes()?;
                         unsafe {
-                            f(json.as_ptr(), json.len(), user_data as *const c_void);
+                            if f(json.as_ptr(), json.len(), user_data as *const c_void) == false {
+                                return Ok(());
+                            }
                         }
                     }
                 })() {
