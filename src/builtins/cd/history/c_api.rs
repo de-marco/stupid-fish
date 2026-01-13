@@ -7,7 +7,6 @@ use {
     crate::hack::{self, Result, make_random_socket_address, make_socket_address_with},
     fake_log::__err,
     libc::size_t,
-    sj::Json,
 };
 
 type Callback = unsafe extern "C" fn(*const u8, size_t, *const c_void) -> bool;
@@ -28,16 +27,14 @@ extern "C" fn stupid_fish_start_cd_history_status(pid: u32, f: Callback, user_da
                     loop {
                         let mut buf = [u8::MIN; 2048];
                         let (size, _) = socket.recv_from(&mut buf)?;
-                        let json = match str::from_utf8(&buf[..size]) {
-                            Ok(path) => Json::from(path),
+                        match str::from_utf8(&buf[..size]) {
+                            Ok(_) => unsafe {
+                                if f(buf[..size].as_ptr(), size, user_data as *const c_void) == false {
+                                    return Ok(());
+                                }
+                            },
                             Err(_) => return Err(err!("Unexpected data from server")),
                         };
-                        let json = json.format_as_bytes()?;
-                        unsafe {
-                            if f(json.as_ptr(), json.len(), user_data as *const c_void) == false {
-                                return Ok(());
-                            }
-                        }
                     }
                 })() {
                     __err!("{err}\n");
