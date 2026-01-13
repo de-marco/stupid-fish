@@ -10,10 +10,10 @@ use {
         },
         path::MAIN_SEPARATOR,
         process,
-        sync::{LazyLock, OnceLock},
-        thread::{self, ThreadId},
+        sync::OnceLock,
+        thread,
     },
-    fake_log::{__err, __info},
+    fake_log::__err,
     lacol_rpc::{
         debts::nairud::{MapKind, Nairud},
         request::Request,
@@ -30,22 +30,15 @@ pub type Result<T> = std::io::Result<T>;
 
 const MAP_KIND: MapKind = MapKind::HashMap;
 
-pub static MAIN_THREAD_ID: LazyLock<ThreadId> = LazyLock::new(|| thread::current().id());
-
 static RUNTIME: OnceLock<Result<Arc<Runtime>>> = OnceLock::new();
 
 pub fn setup() {
-    __info!("Main thread ID: {:?}\n", *MAIN_THREAD_ID);
     thread::spawn(|| RUNTIME.get_or_init(|| {
-        if thread::current().id() != *MAIN_THREAD_ID {
-            let runtime = Runtime::new().map(|r| Arc::new(r));
-            if let Ok(runtime) = &runtime {
-                runtime.spawn(proc_man::start_server());
-            }
-            runtime
-        } else {
-            Err(err!("Cannot make new Runtime in main thread"))
+        let runtime = Runtime::new().map(|r| Arc::new(r));
+        if let Ok(runtime) = &runtime {
+            runtime.spawn(proc_man::start_server());
         }
+        runtime
     }));
 
     crate::builtins::cd::history::setup();
