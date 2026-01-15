@@ -1678,9 +1678,10 @@ impl HistorySearch {
 
 /// Saves the new history to disk.
 pub fn save_all() {
-    for hist in HISTORIES.lock().unwrap().values() {
-        hist.save();
-    }
+    // No we don't
+    // for hist in HISTORIES.lock().unwrap().values() {
+    //     hist.save();
+    // }
 }
 
 /// Return the prefix for the files to be used for command and read history.
