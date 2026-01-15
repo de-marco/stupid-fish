@@ -1,1 +1,0 @@
--   Remove shortcuts to change current directory.
