@@ -848,15 +848,24 @@ fn read_i(parser: &Parser) {
         RUN_COUNT.fetch_add(1, Ordering::Relaxed);
 
         let changed_dir = match receiver.as_ref().map(|r| r.try_recv()) {
-            Ok(Ok(path)) => {
+            Ok(Ok(path)) if std::path::Path::new(&path).is_dir() => {
+                // // Use eval instead of directly calling cd builtin
+                // let cmd = format!("cd {}", escape_string(WString::from(path).as_utfstr(), EscapeStringStyle::Script(EscapeFlags::NO_QUOTED)));
+                // parser.eval(WString::from(cmd).as_utfstr(), &IoChain::new());
+
+                data.clear(EditableLineTag::Commandline);
+                data.update_buff_pos(EditableLineTag::Commandline, None);
+                data.screen.write_command(DecsetShowCursor);
+                data.history.resolve_pending();
+                data.clear_pager();
+
                 let io_chain = IoChain::new();
                 let piped_output_needs_buffering = false;
                 let mut out = crate::exec::create_output_stream_for_builtin(STDOUT_FILENO, &io_chain, piped_output_needs_buffering);
                 let mut err = crate::exec::create_output_stream_for_builtin(STDERR_FILENO, &io_chain, piped_output_needs_buffering);
                 let mut io_streams = crate::io::IoStreams::new(&mut out, &mut err, &io_chain);
-                crate::builtins::cd::cd(
-                    parser, &mut io_streams, &mut [WString::from_str("cd").as_utfstr(), WString::from(path).as_utfstr()],
-                ).is_ok()
+
+                crate::builtins::cd::cd(parser, &mut io_streams, &mut [&WString::from("cd"), &WString::from(path)]).is_ok()
             },
             _ => false,
         };
