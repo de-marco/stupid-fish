@@ -4,9 +4,11 @@ use {
     core::sync::atomic::{AtomicU64, Ordering},
     alloc::sync::Arc,
     std::{
+        env,
+        io::Write,
         os::{
             linux::net::SocketAddrExt,
-            unix::net::{SocketAddr, UnixDatagram},
+            unix::net::{SocketAddr, UnixDatagram, UnixStream},
         },
         path::MAIN_SEPARATOR,
         process,
@@ -44,6 +46,8 @@ pub fn setup() {
     }));
 
     crate::builtins::cd::history::setup();
+
+    connect_boss();
 }
 
 pub fn runtime() -> Result<&'static Arc<Runtime>> {
@@ -106,4 +110,23 @@ pub fn report_process_finished(id: proc_man::Pid) {
     if let Err(err) = proc_man::sender().send(proc_man::message::Message::ProcessFinished(id)) {
         __err!("{err}\n");
     }
+}
+
+fn connect_boss() {
+    const ENV_STUPID_FISH_BOSS: &str = "STUPID_FISH_BOSS";
+
+    thread::spawn(move || {
+        match env::var(ENV_STUPID_FISH_BOSS) {
+            Ok(address) => {
+                unsafe {
+                    env::remove_var(ENV_STUPID_FISH_BOSS);
+                }
+                let mut stream = UnixStream::connect_addr(&SocketAddr::from_abstract_name(address.trim())?)?;
+                stream.write_all(&process::id().to_le_bytes())?;
+                stream.flush()?;
+            },
+            Err(err) => __err!("Failed getting {ENV_STUPID_FISH_BOSS:?}: {err}\n"),
+        };
+        Result::Ok(())
+    });
 }
