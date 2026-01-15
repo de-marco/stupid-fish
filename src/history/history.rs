@@ -415,6 +415,11 @@ impl HistoryImpl {
     /// Loads old items if necessary.
     /// Return a reference to the loaded history file.
     fn load_old_if_needed(&mut self) -> &HistoryFile {
+        #[cfg(not(test))]
+        if crate::hack::ALLOW_LOADING_HISTORY_FROM_FILES == false {
+            return self.file_contents.insert(HistoryFile::create_empty());
+        }
+
         if let Some(ref file_contents) = self.file_contents {
             return file_contents;
         }
@@ -869,6 +874,11 @@ impl HistoryImpl {
     /// file to the new history file.
     /// The new contents will automatically be re-mapped later.
     fn populate_from_config_path(&mut self) {
+        #[cfg(not(test))]
+        if crate::hack::ALLOW_LOADING_HISTORY_FROM_FILES == false {
+            return;
+        }
+
         let Ok(Some(new_file)) = self.history_file_path() else {
             return;
         };
@@ -919,6 +929,11 @@ impl HistoryImpl {
     /// handle multiline commands. We can't actually parse bash syntax and the bash history file
     /// does not unambiguously encode multiline commands.
     fn populate_from_bash<R: BufRead>(&mut self, contents: R) {
+        #[cfg(not(test))]
+        if crate::hack::ALLOW_LOADING_HISTORY_FROM_FILES == false {
+            return;
+        }
+
         // Process the entire history file until EOF is observed.
         // Pretend all items were created at this time.
         let when = self.timestamp_now();
@@ -1159,6 +1174,11 @@ fn format_history_record(
 
 /// Decide whether we ought to import a bash history line into fish. This is a very crude heuristic.
 fn should_import_bash_history_line(line: &wstr) -> bool {
+    #[cfg(not(test))]
+    if crate::hack::ALLOW_LOADING_HISTORY_FROM_FILES == false {
+        return false;
+    }
+
     if line.is_empty() {
         return false;
     }

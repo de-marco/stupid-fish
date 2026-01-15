@@ -1,1 +1,0 @@
--   Disable loading history from file on startup.

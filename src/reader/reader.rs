@@ -6061,6 +6061,11 @@ fn reader_shell_test(parser: &Parser, bstr: &wstr) -> Result<(), ParserTestError
 impl<'a> Reader<'a> {
     // Import history from older location (config path) if our current history is empty.
     fn import_history_if_necessary(&mut self) {
+        #[cfg(not(test))]
+        if crate::hack::ALLOW_LOADING_HISTORY_FROM_FILES == false {
+            return;
+        }
+
         if self.history.is_empty() {
             self.history.populate_from_config_path();
         }

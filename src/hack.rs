@@ -26,6 +26,9 @@ use {
     },
 };
 
+#[cfg(test)]
+mod tests;
+
 pub mod c_api;
 
 mod proc_man;
@@ -35,6 +38,8 @@ pub type Result<T> = std::io::Result<T>;
 const MAP_KIND: MapKind = MapKind::HashMap;
 
 static RUNTIME: OnceLock<Result<Arc<Runtime>>> = OnceLock::new();
+
+pub const ALLOW_LOADING_HISTORY_FROM_FILES: bool = false;
 
 pub fn setup() {
     thread::spawn(|| RUNTIME.get_or_init(|| {
