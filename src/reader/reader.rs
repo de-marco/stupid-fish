@@ -843,15 +843,30 @@ fn read_i(parser: &Parser) {
     // Note this may be disabled within the loop, e.g. when running fish script bound to keys.
     let mut tty = TtyHandoff::new(reader_save_screen_state);
 
-    while !check_exit_loop_maybe_warning(Some(&mut data)) {
+    let receiver = crate::hack::start_cd_manager();
+    while check_exit_loop_maybe_warning(Some(&mut data)) == false {
         RUN_COUNT.fetch_add(1, Ordering::Relaxed);
+
+        let changed_dir = match receiver.as_ref().map(|r| r.try_recv()) {
+            Ok(Ok(path)) => {
+                let io_chain = IoChain::new();
+                let piped_output_needs_buffering = false;
+                let mut out = crate::exec::create_output_stream_for_builtin(STDOUT_FILENO, &io_chain, piped_output_needs_buffering);
+                let mut err = crate::exec::create_output_stream_for_builtin(STDERR_FILENO, &io_chain, piped_output_needs_buffering);
+                let mut io_streams = crate::io::IoStreams::new(&mut out, &mut err, &io_chain);
+                crate::builtins::cd::cd(
+                    parser, &mut io_streams, &mut [WString::from_str("cd").as_utfstr(), WString::from(path).as_utfstr()],
+                ).is_ok()
+            },
+            _ => false,
+        };
 
         let Some(command) = data.readline(set_shell_modes_temporarily(data.conf.inputfd), None)
         else {
             continue;
         };
 
-        if command.is_empty() {
+        if changed_dir || command.is_empty() {
             continue;
         }
 

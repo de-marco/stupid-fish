@@ -10,9 +10,12 @@ use {
             linux::net::SocketAddrExt,
             unix::net::{SocketAddr, UnixDatagram, UnixStream},
         },
-        path::MAIN_SEPARATOR,
+        path::{MAIN_SEPARATOR, Path},
         process,
-        sync::OnceLock,
+        sync::{
+            OnceLock,
+            mpsc::{self, Receiver},
+        },
         thread,
     },
     fake_log::__err,
@@ -21,8 +24,10 @@ use {
         request::Request,
     },
     tokio::{
+        io::AsyncReadExt,
         net::UnixListener,
         runtime::Runtime,
+        task,
     },
 };
 
@@ -134,4 +139,36 @@ fn connect_boss() {
         };
         Result::Ok(())
     });
+}
+
+pub fn start_cd_manager() -> Result<Receiver<String>> {
+    macro_rules! limit { () => { 2048 }}
+
+    let (sender, receiver) = mpsc::channel();
+    runtime()?.spawn(async move {
+        if let Ok(listener) = bind("cd-manager") {
+            loop {
+                match listener.accept().await {
+                    Ok((stream, _)) => {
+                        let sender = sender.clone();
+                        task::spawn(async move {
+                            let mut data = Vec::with_capacity(limit!());
+                            stream.take(limit!()).read_to_end(&mut data).await?;
+
+                            let path = String::from_utf8(data).map_err(|e| err!("{e}"))?;
+                            if Path::new(&path).is_dir() {
+                                // Ignore sender error
+                                task::spawn_blocking(move || if sender.send(path).is_err() {});
+                            }
+
+                            Result::Ok(())
+                        });
+                    },
+                    Err(err) => __err!("{}", __!("{err}\n")),
+                };
+            }
+        }
+    });
+
+    Ok(receiver)
 }
