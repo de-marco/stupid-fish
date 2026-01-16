@@ -1,6 +1,14 @@
 use {
-    core::ffi::{c_int, c_void},
-    std::os::unix::net::UnixDatagram,
+    core::{
+        ffi::{c_int, c_void},
+        time::Duration,
+    },
+    std::{
+        io::{Error, ErrorKind},
+        os::unix::net::{SocketAddr, UnixDatagram},
+        thread,
+        time::Instant,
+    },
     crate::hack::{self, MAP_KIND, Result},
     super::{
         super::{make_random_socket_address, make_socket_address_with},
@@ -32,10 +40,7 @@ extern "C" fn stupid_fish_start_process_watcher(pid: u32, f: Callback, user_data
             runtime.spawn_blocking(move || {
                 if let Result::<()>::Err(err) = (|| {
                     let socket = UnixDatagram::bind_addr(&make_random_socket_address()?)?;
-                    socket.send_to_addr(
-                        &Nairud::from(Request::new(super::request::Request::WatchForProcesses, ())).encode_as_vec()?,
-                        &make_socket_address_with(pid, super::UDS_STATUS_SERVER)?,
-                    )?;
+                    connect_and_register(&socket, &make_socket_address_with(pid, super::UDS_STATUS_SERVER)?)?;
                     loop {
                         let mut buf = [u8::MIN; UNIX_DATAGRAM_BUF];
                         let (size, _) = socket.recv_from(&mut buf)?;
@@ -61,4 +66,22 @@ extern "C" fn stupid_fish_start_process_watcher(pid: u32, f: Callback, user_data
             0
         },
     }
+}
+
+fn connect_and_register(socket: &UnixDatagram, server_address: &SocketAddr) -> Result<()> {
+    const TIMEOUT: Duration = Duration::from_secs(3);
+
+    let start = Instant::now();
+    let request = Nairud::from(Request::new(super::request::Request::WatchForProcesses, ())).encode_as_vec()?;
+    while Instant::now().checked_duration_since(start).map(|d| d <= TIMEOUT).unwrap_or(false) {
+        match socket.send_to_addr(&request, server_address) {
+            Ok(_) => return Ok(()),
+            Err(err) => match err.kind() {
+                ErrorKind::ConnectionRefused => thread::sleep(Duration::from_millis(10)),
+                _ => return Err(err),
+            },
+        };
+    }
+
+    Err(Error::new(ErrorKind::TimedOut, __!()))
 }
