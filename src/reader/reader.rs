@@ -847,46 +847,21 @@ fn read_i(parser: &Parser) {
     while check_exit_loop_maybe_warning(Some(&mut data)) == false {
         RUN_COUNT.fetch_add(1, Ordering::Relaxed);
 
-        if match receiver.as_ref().map(|r| r.try_recv()) {
+        let Some(command) = data.readline(set_shell_modes_temporarily(data.conf.inputfd), None)
+        else {
+            continue;
+        };
+
+        let changed_dir = match receiver.as_ref().map(|r| r.try_recv()) {
             Ok(Ok(path)) if std::path::Path::new(&path).is_dir() => {
-                data.clear(EditableLineTag::Commandline);
-                data.clear(EditableLineTag::SearchField);
-                data.update_buff_pos(EditableLineTag::Commandline, None);
-                data.history_search.reset();
-                data.command_line_transient_edit = None;
-                data.autosuggestion.clear();
-                data.saved_autosuggestion = None;
-                data.clear_pager();
-                data.cycle_command_line.clear();
-                data.cycle_cursor_pos = 0;
-                data.selection = None;
-                data.reset_loop_state = true;
-
-                // Also update the commandline state snapshot
-                {
-                    let mut snapshot = commandline_state_snapshot();
-                    snapshot.text.clear();
-                    snapshot.cursor_pos = 0;
-                    snapshot.selection = None;
-                    snapshot.search_field = None;
-                }
-
                 let io_chain = IoChain::new();
                 let piped_output_needs_buffering = false;
                 let mut out = crate::exec::create_output_stream_for_builtin(STDOUT_FILENO, &io_chain, piped_output_needs_buffering);
                 let mut err = crate::exec::create_output_stream_for_builtin(STDERR_FILENO, &io_chain, piped_output_needs_buffering);
                 let mut io_streams = crate::io::IoStreams::new(&mut out, &mut err, &io_chain);
-
                 crate::builtins::cd::cd(parser, &mut io_streams, &mut [&WString::from("cd"), &WString::from(path)]).is_ok()
             },
             _ => false,
-        } {
-            continue;
-        }
-
-        let Some(command) = data.readline(set_shell_modes_temporarily(data.conf.inputfd), None)
-        else {
-            continue;
         };
 
         if command.is_empty() {
@@ -897,12 +872,16 @@ fn read_i(parser: &Parser) {
         tty.disable_tty_protocols();
         data.clear(EditableLineTag::Commandline);
         data.update_buff_pos(EditableLineTag::Commandline, None);
-        BufferedOutputter::new(Outputter::stdoutput()).write_command(Osc133CommandStart(&command));
-        event::fire_generic(parser, L!("fish_preexec").to_owned(), vec![command.clone()]);
-        let eval_res = reader_run_command(parser, &command);
-        signal_clear_cancel();
-        if !eval_res.no_status {
-            STATUS_COUNT.fetch_add(1, Ordering::Relaxed);
+        if changed_dir {
+            signal_clear_cancel();
+        } else {
+            BufferedOutputter::new(Outputter::stdoutput()).write_command(Osc133CommandStart(&command));
+            event::fire_generic(parser, L!("fish_preexec").to_owned(), vec![command.clone()]);
+            let eval_res = reader_run_command(parser, &command);
+            signal_clear_cancel();
+            if !eval_res.no_status {
+                STATUS_COUNT.fetch_add(1, Ordering::Relaxed);
+            }
         }
 
         // If the command requested an exit, then process it now and clear it.
@@ -911,7 +890,9 @@ fn read_i(parser: &Parser) {
 
         BufferedOutputter::new(Outputter::stdoutput())
             .write_command(Osc133CommandFinished(parser.get_last_status()));
-        event::fire_generic(parser, L!("fish_postexec").to_owned(), vec![command]);
+        if changed_dir == false {
+            event::fire_generic(parser, L!("fish_postexec").to_owned(), vec![command]);
+        }
         // Allow any pending history items to be returned in the history array.
         data.history.resolve_pending();
 
