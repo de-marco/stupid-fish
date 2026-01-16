@@ -847,17 +847,29 @@ fn read_i(parser: &Parser) {
     while check_exit_loop_maybe_warning(Some(&mut data)) == false {
         RUN_COUNT.fetch_add(1, Ordering::Relaxed);
 
-        let changed_dir = match receiver.as_ref().map(|r| r.try_recv()) {
+        if match receiver.as_ref().map(|r| r.try_recv()) {
             Ok(Ok(path)) if std::path::Path::new(&path).is_dir() => {
-                // // Use eval instead of directly calling cd builtin
-                // let cmd = format!("cd {}", escape_string(WString::from(path).as_utfstr(), EscapeStringStyle::Script(EscapeFlags::NO_QUOTED)));
-                // parser.eval(WString::from(cmd).as_utfstr(), &IoChain::new());
-
                 data.clear(EditableLineTag::Commandline);
+                data.clear(EditableLineTag::SearchField);
                 data.update_buff_pos(EditableLineTag::Commandline, None);
-                data.screen.write_command(DecsetShowCursor);
-                data.history.resolve_pending();
+                data.history_search.reset();
+                data.command_line_transient_edit = None;
+                data.autosuggestion.clear();
+                data.saved_autosuggestion = None;
                 data.clear_pager();
+                data.cycle_command_line.clear();
+                data.cycle_cursor_pos = 0;
+                data.selection = None;
+                data.reset_loop_state = true;
+
+                // Also update the commandline state snapshot
+                {
+                    let mut snapshot = commandline_state_snapshot();
+                    snapshot.text.clear();
+                    snapshot.cursor_pos = 0;
+                    snapshot.selection = None;
+                    snapshot.search_field = None;
+                }
 
                 let io_chain = IoChain::new();
                 let piped_output_needs_buffering = false;
@@ -868,14 +880,16 @@ fn read_i(parser: &Parser) {
                 crate::builtins::cd::cd(parser, &mut io_streams, &mut [&WString::from("cd"), &WString::from(path)]).is_ok()
             },
             _ => false,
-        };
+        } {
+            continue;
+        }
 
         let Some(command) = data.readline(set_shell_modes_temporarily(data.conf.inputfd), None)
         else {
             continue;
         };
 
-        if changed_dir || command.is_empty() {
+        if command.is_empty() {
             continue;
         }
 
