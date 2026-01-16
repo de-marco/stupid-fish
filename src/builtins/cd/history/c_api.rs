@@ -2,8 +2,14 @@ use {
     core::{
         ffi::{c_int, c_void},
         str,
+        time::Duration,
     },
-    std::os::unix::net::UnixDatagram,
+    std::{
+        io::{Error, ErrorKind},
+        os::unix::net::{SocketAddr, UnixDatagram},
+        thread,
+        time::Instant,
+    },
     crate::hack::{self, Result, make_random_socket_address, make_socket_address_with},
     fake_log::__err,
     libc::size_t,
@@ -23,7 +29,7 @@ extern "C" fn stupid_fish_start_cd_history_status(pid: u32, f: Callback, user_da
             runtime.spawn_blocking(move || {
                 if let Result::<()>::Err(err) = (|| {
                     let socket = UnixDatagram::bind_addr(&make_random_socket_address()?)?;
-                    socket.send_to_addr(&[u8::MIN], &make_socket_address_with(pid, super::STATUS_SERVER_ADDRESS)?)?;
+                    connect_and_register(&socket, &make_socket_address_with(pid, super::STATUS_SERVER_ADDRESS)?)?;
                     loop {
                         let mut buf = [u8::MIN; 2048];
                         let (size, _) = socket.recv_from(&mut buf)?;
@@ -43,4 +49,21 @@ extern "C" fn stupid_fish_start_cd_history_status(pid: u32, f: Callback, user_da
             0
         },
     }
+}
+
+fn connect_and_register(socket: &UnixDatagram, server_address: &SocketAddr) -> Result<()> {
+    const TIMEOUT: Duration = Duration::from_secs(3);
+
+    let start = Instant::now();
+    while Instant::now().checked_duration_since(start).map(|d| d <= TIMEOUT).unwrap_or(false) {
+        match socket.send_to_addr(&[u8::MIN], server_address) {
+            Ok(_) => return Ok(()),
+            Err(err) => match err.kind() {
+                ErrorKind::ConnectionRefused => thread::sleep(Duration::from_millis(10)),
+                _ => return Err(err),
+            },
+        };
+    }
+
+    Err(Error::new(ErrorKind::TimedOut, __!()))
 }
