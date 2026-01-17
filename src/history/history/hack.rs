@@ -13,7 +13,8 @@ pub (super) fn start_servers(history: Arc<History>) -> Result<()> {
     let runtime = crate::hack::runtime()?;
     runtime.spawn(Server::HistoryProvider.start(Arc::clone(&history)));
     runtime.spawn(Server::HistoryManager.start(Arc::clone(&history)));
-    runtime.spawn(Server::CdHistoryProvider.start(history));
+    runtime.spawn(Server::CdHistoryProvider.start(Arc::clone(&history)));
+    runtime.spawn(Server::CdHistoryManager.start(history));
 
     Ok(())
 }

@@ -117,6 +117,11 @@ impl History {
         self.by_time.iter().rev().map(|(time, path)| (*time, path.as_str()))
     }
 
+    pub fn clear(&mut self) {
+        self.by_path.clear();
+        self.by_time.clear();
+    }
+
 }
 
 pub fn setup() {

@@ -32,5 +32,9 @@ fn tests() -> Result<()> {
     let recent: Vec<_> = hist.recents().map(|(_, p)| p).collect();
     assert_eq!(recent, vec!["ddd", "bbb", "ccc"]);
 
+    hist.clear();
+    assert!(hist.by_path.is_empty());
+    assert!(hist.by_time.is_empty());
+
     Ok(())
 }

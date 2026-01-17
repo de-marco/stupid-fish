@@ -26,6 +26,7 @@ pub (super) enum Server {
     HistoryProvider,
     HistoryManager,
     CdHistoryProvider,
+    CdHistoryManager,
 }
 
 impl Server {
@@ -35,6 +36,7 @@ impl Server {
             Self::HistoryProvider => "history-provider",
             Self::HistoryManager => "history-manager",
             Self::CdHistoryProvider => "cd-history-provider",
+            Self::CdHistoryManager => "cd-history-manager",
         }
     }
 
@@ -44,6 +46,7 @@ impl Server {
             Self::HistoryProvider => start_provider_server(bind()?, history).await,
             Self::HistoryManager => start_manager_server(bind()?, history).await,
             Self::CdHistoryProvider => start_cd_history_provider_server(bind()?).await,
+            Self::CdHistoryManager => start_cd_history_manager_server(bind()?).await,
         }
     }
 
@@ -125,6 +128,48 @@ async fn start_cd_history_provider_server(listener: UnixListener) -> Result<()> 
                         let mut stream = BufWriter::new(stream);
                         stream.write_all(&json.format_as_bytes()?).await?;
                         stream.flush().await
+                    }.await {
+                        __err!("{}", __!("{err}\n"));
+                    }
+                });
+            },
+            Err(err) => __err!("{}", __!("{err}\n")),
+        };
+    }
+}
+
+async fn start_cd_history_manager_server(listener: UnixListener) -> Result<()> {
+    loop {
+        match listener.accept().await {
+            Ok((stream, _)) => {
+                task::spawn(async move {
+                    if let Err(err) = async {
+                        let paths = {
+                            macro_rules! limit { () => { 1024 * 1024 }}
+                            let mut stream = BufReader::new(stream).take(limit!());
+                            let mut data = Vec::with_capacity(limit!());
+                            stream.read_to_end(&mut data).await?;
+                            Array::try_from(sj::parse_bytes(data, SJ_MAP_KIND)?)?
+                        };
+                        task::spawn_blocking(move || {
+                            let start = Instant::now();
+                            loop {
+                                match crate::builtins::cd::history::GLOBAL.try_write() {
+                                    Ok(mut history) => {
+                                        history.clear();
+                                        for p in paths {
+                                            history.add(String::try_from(p)?);
+                                        }
+                                        return Ok(());
+                                    },
+                                    Err(TryLockError::Poisoned(_)) => crate::builtins::cd::history::GLOBAL.clear_poison(),
+                                    Err(TryLockError::WouldBlock) => thread::sleep(Duration::from_millis(10)),
+                                };
+                                if Instant::now().checked_duration_since(start).map(|d| d >= Duration::from_secs(1)).unwrap_or(true) {
+                                    return Err(err!("Timed out waiting to write global history"));
+                                }
+                            }
+                        }).await?
                     }.await {
                         __err!("{}", __!("{err}\n"));
                     }
