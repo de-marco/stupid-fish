@@ -11,7 +11,7 @@ use {
         time::Instant,
     },
     crate::hack::{self, Result, make_random_socket_address, make_socket_address_with},
-    fake_log::__err,
+    fake_log::{__err, __info},
     libc::size_t,
 };
 
@@ -57,7 +57,10 @@ fn connect_and_register(socket: &UnixDatagram, server_address: &SocketAddr) -> R
     let start = Instant::now();
     while Instant::now().checked_duration_since(start).map(|d| d <= TIMEOUT).unwrap_or(false) {
         match socket.send_to_addr(&[u8::MIN], server_address) {
-            Ok(_) => return Ok(()),
+            Ok(_) => {
+                __info!("{}\n", __!("Connected to server"));
+                return Ok(())
+            },
             Err(err) => match err.kind() {
                 ErrorKind::ConnectionRefused => thread::sleep(Duration::from_millis(10)),
                 _ => return Err(err),
