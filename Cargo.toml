@@ -151,7 +151,7 @@ rsconf.workspace = true
 unix_path.workspace = true
 
 [lib]
-crate-type = ["rlib", 'cdylib']
+crate-type = ["rlib", 'staticlib']
 path = "src/lib.rs"
 
 [[bin]]
