@@ -6,6 +6,7 @@ use {
     std::{
         sync::{LazyLock, OnceLock},
         thread::{self, JoinHandle},
+        time::Instant,
     },
     super::Result,
     tokio::runtime::Runtime,
@@ -17,8 +18,13 @@ pub fn runtime() -> Result<&'static Arc<Runtime>> {
         RUNTIME.get_or_init(|| Runtime::new().map(|r| Arc::new(r)));
     }));
 
-    while SETUP.is_finished() == false {
+    let start = Instant::now();
+    while Instant::now().checked_duration_since(start).map(|d| d <= Duration::from_millis(2_000)).unwrap_or(false) {
+        if SETUP.is_finished() {
+            break;
+        }
         thread::sleep(Duration::from_millis(10));
     }
+
     RUNTIME.get().ok_or_else(|| err!("Runtime has not been made"))?.as_ref().map_err(|e| err!("{e}"))
 }
