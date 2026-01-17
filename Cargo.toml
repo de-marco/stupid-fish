@@ -73,6 +73,10 @@ xterm-color = "1.0.1"
 overflow-checks = true
 lto = true
 
+# stupid-fish
+strip = true
+codegen-units = 1
+
 [profile.release-with-debug]
 inherits = "release"
 debug = true
